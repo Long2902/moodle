@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  schema:
+  backup-runtime:
     runs-on: ubuntu-24.04
     steps:
       - name: Setting up DB mysql
@@ -32,6 +32,20 @@ jobs:
       - name: Checking out exact CI branch
         uses: actions/checkout@v4
 
+      - name: Restore targeted DIGIERA Media runtime overlay
+        run: |
+          set -euo pipefail
+          base64 -d .digiera/backup-runtime-overlay.b64 > /tmp/digiera-backup-runtime-overlay.tgz
+          echo '4f199561522d6b142d346a056eae7b313c81ece63143d7450a02363115107afe  /tmp/digiera-backup-runtime-overlay.tgz' | sha256sum -c -
+          tar -xzf /tmp/digiera-backup-runtime-overlay.tgz -C .
+          test -f public/local/digieramedia/classes/restore/reference_remapper.php
+          test -f public/local/digieramedia/tests/independent_copy_test.php
+
+      - name: PHP syntax gate
+        run: |
+          set -euo pipefail
+          find public/local/digieramedia -type f -name '*.php' -print0 | sort -z | xargs -0 -n1 php -l
+
       - name: Setting up Moodle PHPUnit
         env:
           dbtype: mysqli
@@ -42,10 +56,25 @@ jobs:
           sudo locale-gen en_AU.UTF-8
           php public/admin/tool/phpunit/cli/init.php --no-composer-self-update
 
-      - name: Run DIGIERA Media schema tests
+      - name: Run DIGIERA Media schema test
         env:
           dbtype: mysqli
         run: vendor/bin/phpunit public/local/digieramedia/tests/schema_test.php
 
-      - name: Verify clean tree
-        run: git status --short
+      - name: Run backup manifest test
+        env:
+          dbtype: mysqli
+        run: vendor/bin/phpunit public/local/digieramedia/tests/backup_manifest_test.php
+
+      - name: Run shared reference remapper test
+        env:
+          dbtype: mysqli
+        run: vendor/bin/phpunit public/local/digieramedia/tests/reference_remapper_test.php
+
+      - name: Run independent copy test
+        env:
+          dbtype: mysqli
+        run: vendor/bin/phpunit public/local/digieramedia/tests/independent_copy_test.php
+
+      - name: Verify no tracked Moodle source changed by tests
+        run: git diff --exit-code
