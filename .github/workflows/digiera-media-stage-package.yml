@@ -6,6 +6,7 @@ on:
       - feature/digiera-media-v1-stage
     paths:
       - 'public/local/digieramedia/**'
+      - 'public/filter/digieramedia/**'
       - '.github/workflows/digiera-media-stage-package.yml'
       - '.digiera/tools/**'
   workflow_dispatch:
@@ -31,7 +32,10 @@ jobs:
           set -euo pipefail
           test -f public/local/digieramedia/version.php
           test -f public/local/digieramedia/db/install.xml
-          find public/local/digieramedia -type f -name '*.php' -print0 | sort -z | xargs -0 -n1 php -l
+          test -f public/filter/digieramedia/version.php
+          test -f public/filter/digieramedia/classes/text_filter.php
+          find public/local/digieramedia public/filter/digieramedia \
+            -type f -name '*.php' -print0 | sort -z | xargs -0 -n1 php -l
 
       - name: Build stage bundle
         shell: bash
@@ -40,7 +44,8 @@ jobs:
           mkdir -p .digiera/dist
           rm -f .digiera/dist/digieramedia-stage.tgz .digiera/dist/digieramedia-stage.sha256
           tar --sort=name --mtime='UTC 2026-09-06' --owner=0 --group=0 --numeric-owner \
-            -czf .digiera/dist/digieramedia-stage.tgz -C public/local digieramedia
+            -czf .digiera/dist/digieramedia-stage.tgz \
+            -C public local/digieramedia filter/digieramedia
           sha256sum .digiera/dist/digieramedia-stage.tgz > .digiera/dist/digieramedia-stage.sha256
           cat .digiera/dist/digieramedia-stage.sha256
 
