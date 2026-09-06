@@ -88,6 +88,7 @@ final class reference_remapper {
                 'courseid' => $metadata['courseid'],
                 'cmid' => $metadata['cmid'],
                 'component' => 'restore',
+                'entitytype' => 'restore',
                 'entityid' => 0,
                 'fieldname' => '',
                 'displayprofile' => (string)($source->displayprofile ?? 'embedded'),
