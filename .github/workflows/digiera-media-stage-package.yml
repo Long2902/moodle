@@ -1,0 +1,60 @@
+name: DIGIERA Media stage package
+
+on:
+  push:
+    branches:
+      - feature/digiera-media-v1-stage
+    paths:
+      - 'public/local/digieramedia/**'
+      - '.github/workflows/digiera-media-stage-package.yml'
+      - '.digiera/tools/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout stage branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Verify plugin source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f public/local/digieramedia/version.php
+          test -f public/local/digieramedia/db/install.xml
+          find public/local/digieramedia -type f -name '*.php' -print0 | sort -z | xargs -0 -n1 php -l
+
+      - name: Build stage bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .digiera/dist
+          rm -f .digiera/dist/digieramedia-stage.tgz .digiera/dist/digieramedia-stage.sha256
+          tar --sort=name --mtime='UTC 2026-09-06' --owner=0 --group=0 --numeric-owner \
+            -czf .digiera/dist/digieramedia-stage.tgz -C public/local digieramedia
+          sha256sum .digiera/dist/digieramedia-stage.tgz > .digiera/dist/digieramedia-stage.sha256
+          cat .digiera/dist/digieramedia-stage.sha256
+
+      - name: Commit stage bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .digiera/dist
+          if git diff --cached --quiet; then
+            echo 'STAGE_BUNDLE=UNCHANGED'
+            exit 0
+          fi
+          git commit -m 'build: refresh DIGIERA Media stage bundle'
+          git push origin HEAD:feature/digiera-media-v1-stage
+          echo 'STAGE_BUNDLE=PASS'
