@@ -25,17 +25,20 @@ final class schema_test extends \advanced_testcase {
         global $DB;
         $dbman = $DB->get_manager();
         $checks = [
-            ['local_digieramedia_media', 'uuid'],
-            ['local_digieramedia_reference', 'uuid'],
-            ['local_digieramedia_upload', 'sessionuuid'],
-            ['local_digieramedia_version', 'media-version'],
-            ['local_digieramedia_upart', 'upload-part'],
-            ['local_digieramedia_migration', 'jobuuid'],
-            ['local_digieramedia_migitem', 'migration-fingerprint'],
+            ['local_digieramedia_media', 'uuid', ['uuid']],
+            ['local_digieramedia_reference', 'uuid', ['uuid']],
+            ['local_digieramedia_upload', 'sessionuuid', ['sessionuuid']],
+            ['local_digieramedia_version', 'media-version', ['mediaid', 'versionno']],
+            ['local_digieramedia_upart', 'upload-part', ['uploadid', 'partnumber']],
+            ['local_digieramedia_migration', 'jobuuid', ['jobuuid']],
+            ['local_digieramedia_migitem', 'migration-fingerprint', ['migrationid', 'candidatefingerprint']],
         ];
-        foreach ($checks as [$table, $index]) {
+        foreach ($checks as [$table, $index, $fields]) {
             $this->assertTrue(
-                $dbman->index_exists(new \xmldb_table($table), new \xmldb_index($index)),
+                $dbman->index_exists(
+                    new \xmldb_table($table),
+                    new \xmldb_index($index, XMLDB_INDEX_UNIQUE, $fields)
+                ),
                 $table . ':' . $index
             );
         }
