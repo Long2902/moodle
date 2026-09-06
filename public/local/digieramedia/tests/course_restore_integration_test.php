@@ -112,9 +112,9 @@ final class course_restore_integration_test extends \core_backup_backup_restore_
         $this->assertNotSame($sourcereferenceid, (int)$targetreference->id);
         $this->assertSame($mediaid, (int)$targetreference->mediaid,
             'Default restore must share the same logical Media instead of duplicating the R2 object.');
-        $this->assertSame($targetcourse->id, (int)$targetreference->courseid);
-        $this->assertSame($restoredcm->id, (int)$targetreference->cmid);
-        $this->assertSame($restoredcontext->id, (int)$targetreference->contextid);
+        $this->assertSame((int)$targetcourse->id, (int)$targetreference->courseid);
+        $this->assertSame((int)$restoredcm->id, (int)$targetreference->cmid);
+        $this->assertSame((int)$restoredcontext->id, (int)$targetreference->contextid);
         $this->assertSame('FOLLOW_CURRENT', $targetreference->versionmode);
         $this->assertSame(0, (int)$targetreference->pinnedversionid);
 
