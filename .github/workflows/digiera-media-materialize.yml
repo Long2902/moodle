@@ -1,0 +1,72 @@
+name: DIGIERA Media materialize staging source
+
+on:
+  push:
+    branches:
+      - feature/digiera-media-v1-stage-materialize
+    paths:
+      - '.digiera/backup-runtime-overlay.b64'
+      - '.github/workflows/digiera-media-materialize.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout staging branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Restore and verify canonical plugin source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .digiera/backup-runtime-overlay.b64
+          base64 -d .digiera/backup-runtime-overlay.b64 > /tmp/digiera-backup-runtime-overlay.tgz
+          echo '4f199561522d6b142d346a056eae7b313c81ece63143d7450a02363115107afe  /tmp/digiera-backup-runtime-overlay.tgz' | sha256sum -c -
+          tar -tzf /tmp/digiera-backup-runtime-overlay.tgz >/tmp/digiera-media-archive.list
+          tar -xzf /tmp/digiera-backup-runtime-overlay.tgz -C .
+
+          test -f public/local/digieramedia/classes/backup/reference_manifest.php
+          test -f public/local/digieramedia/classes/restore/reference_remapper.php
+          test -f public/local/digieramedia/classes/restore/independent_copy_service.php
+          test -f public/local/digieramedia/tests/backup_manifest_test.php
+          test -f public/local/digieramedia/tests/reference_remapper_test.php
+          test -f public/local/digieramedia/tests/independent_copy_test.php
+
+          echo 'MATERIALIZE_ARCHIVE=PASS'
+          echo 'MATERIALIZED_FILES:'
+          cat /tmp/digiera-media-archive.list
+
+      - name: PHP syntax gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          find public/local/digieramedia -type f -name '*.php' -print0 | sort -z | xargs -0 -n1 php -l
+
+      - name: Commit materialized source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          git add public/local/digieramedia
+          git rm .digiera/backup-runtime-overlay.b64
+          git add .github/workflows/digiera-media-materialize.yml
+
+          if git diff --cached --quiet; then
+            echo 'MATERIALIZE_COMMIT=NO_CHANGES'
+            exit 0
+          fi
+
+          git commit -m 'build: materialize DIGIERA Media staging source'
+          git push origin HEAD:feature/digiera-media-v1-stage-materialize
+          echo 'MATERIALIZE_COMMIT=PASS'
