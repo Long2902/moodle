@@ -6,6 +6,7 @@ on:
       - feature/digiera-media-v1-stage
     paths:
       - 'public/local/digieramedia/**'
+      - 'public/filter/digieramedia/**'
       - '.github/workflows/digiera-media-stage-ci.yml'
   workflow_dispatch:
 
@@ -40,7 +41,8 @@ jobs:
       - name: PHP syntax gate
         run: |
           set -euo pipefail
-          find public/local/digieramedia -type f -name '*.php' -print0 | sort -z | xargs -0 -n1 php -l
+          find public/local/digieramedia public/filter/digieramedia -type f -name '*.php' -print0 2>/dev/null \
+            | sort -z | xargs -0 -r -n1 php -l
 
       - name: Setting up Moodle PHPUnit
         env:
@@ -66,6 +68,9 @@ jobs:
           )
           if [ -f public/local/digieramedia/tests/course_restore_integration_test.php ]; then
             tests+=(public/local/digieramedia/tests/course_restore_integration_test.php)
+          fi
+          if [ -f public/filter/digieramedia/tests/text_filter_test.php ]; then
+            tests+=(public/filter/digieramedia/tests/text_filter_test.php)
           fi
           for testfile in "${tests[@]}"; do
             echo "===== $testfile ====="
