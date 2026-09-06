@@ -1,0 +1,76 @@
+name: DIGIERA Media stage CI
+
+on:
+  push:
+    branches:
+      - feature/digiera-media-v1-stage
+    paths:
+      - 'public/local/digieramedia/**'
+      - '.github/workflows/digiera-media-stage-ci.yml'
+  workflow_dispatch:
+
+jobs:
+  runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Setting up DB mysql
+        uses: moodlehq/mysql-action@v1
+        with:
+          collation server: utf8mb4_bin
+          mysql version: 8.4
+          mysql database: test
+          mysql user: test
+          mysql password: test
+          use tmpfs: true
+          tmpfs size: '1024M'
+          extra conf: --skip-log-bin
+
+      - name: Setting up PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.2
+          ini-values: max_input_vars=5000
+          coverage: none
+
+      - name: Checkout stage branch
+        uses: actions/checkout@v4
+
+      - name: PHP syntax gate
+        run: |
+          set -euo pipefail
+          find public/local/digieramedia -type f -name '*.php' -print0 | sort -z | xargs -0 -n1 php -l
+
+      - name: Setting up Moodle PHPUnit
+        env:
+          dbtype: mysqli
+        run: |
+          echo "pathtophp=$(which php)" >> $GITHUB_ENV
+          cp .github/workflows/config-template.php config.php
+          mkdir ../moodledata
+          sudo locale-gen en_AU.UTF-8
+          php public/admin/tool/phpunit/cli/init.php --no-composer-self-update
+
+      - name: Run DIGIERA Media runtime suite
+        env:
+          dbtype: mysqli
+        shell: bash
+        run: |
+          set -euo pipefail
+          tests=(
+            public/local/digieramedia/tests/schema_test.php
+            public/local/digieramedia/tests/backup_manifest_test.php
+            public/local/digieramedia/tests/reference_remapper_test.php
+            public/local/digieramedia/tests/independent_copy_test.php
+          )
+          if [ -f public/local/digieramedia/tests/course_restore_integration_test.php ]; then
+            tests+=(public/local/digieramedia/tests/course_restore_integration_test.php)
+          fi
+          for testfile in "${tests[@]}"; do
+            echo "===== $testfile ====="
+            vendor/bin/phpunit "$testfile"
+          done
+
+      - name: Verify tests did not mutate tracked source
+        run: git diff --exit-code
