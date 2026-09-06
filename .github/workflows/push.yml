@@ -5,6 +5,7 @@ on:
     branches-ignore:
       - main
       - MOODLE_[0-9]+_STABLE
+      - 'digiera/**'
     tags-ignore:
       - v[0-9]+.[0-9]+.[0-9]+*
   workflow_dispatch:
@@ -37,9 +38,6 @@ jobs:
         run: npx grunt
 
       - name: Looking for uncommitted changes
-        # Add all files to the git index and then run diff --cached to see all changes.
-        # This ensures that we get the status of all files, including new files.
-        # We ignore npm-shrinkwrap.json to make the tasks immune to npm changes.
         run: |
           git add .
           git reset -- npm-shrinkwrap.json
@@ -60,12 +58,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # MySQL builds always run with the lowest PHP supported version.
           - os: ubuntu-24.04
             php: 8.2
             extensions:
             db: mysqli
-          # PostgreSQL builds always run with the highest PHP supported version.
           - os: ubuntu-24.04
             php: 8.4
             db: pgsql
@@ -111,7 +107,7 @@ jobs:
         env:
           dbtype: ${{ matrix.db }}
         run: |
-          echo "pathtophp=$(which php)" >> $GITHUB_ENV # Inject installed pathtophp to env. The template config needs it.
+          echo "pathtophp=$(which php)" >> $GITHUB_ENV
           cp .github/workflows/config-template.php config.php
           mkdir ../moodledata
           sudo locale-gen en_AU.UTF-8
