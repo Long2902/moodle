@@ -1,0 +1,115 @@
+name: DIGIERA Preview Fast Gate
+
+on:
+  push:
+    branches:
+      - digiera/preview-v01
+    paths:
+      - 'public/local/digieranative/**'
+      - 'public/local/digieraoffice/**'
+      - 'public/local/worksheetlibrary/**'
+      - 'public/mod/worksheetgrader/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: digiera-preview-fast-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: public/local/digieranative/client/package-lock.json
+
+      - name: PHP lint
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=0
+          while IFS= read -r -d '' f; do
+            php -l "$f" >/dev/null
+            count=$((count+1))
+          done < <(find \
+            public/local/digieranative \
+            public/local/digieraoffice \
+            public/local/worksheetlibrary \
+            public/mod/worksheetgrader \
+            -name '*.php' -print0)
+          echo "PHP_LINT_FILES=$count"
+
+      - name: XMLDB parse
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          for path in [
+              'public/local/worksheetlibrary/db/install.xml',
+              'public/mod/worksheetgrader/db/install.xml',
+          ]:
+              ET.parse(path)
+          print('XMLDB_PARSE=PASS')
+          PY
+
+      - name: Native PHP standalone contracts
+        run: |
+          php public/local/digieranative/tests/standalone_validator.php
+          php public/local/digieranative/tests/standalone_renderer.php
+
+      - name: Native JS tests and deterministic AMD build
+        working-directory: public/local/digieranative/client
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts
+          npm test
+          npm run build
+          amd='../amd/build/native_editor.min.js'
+          h1="$(sha256sum "$amd" | awk '{print $1}')"
+          s1="$(stat -c '%s' "$amd")"
+          npm run build
+          h2="$(sha256sum "$amd" | awk '{print $1}')"
+          s2="$(stat -c '%s' "$amd")"
+          test "$h1" = "$h2"
+          test "$s1" = "$s2"
+          node --check "$amd"
+          ! grep -a -q 'sourceMappingURL' "$amd"
+          ! grep -a -q '/root/digiera' "$amd"
+          echo "AMD_SHA256=$h2"
+          echo "AMD_BYTES=$s2"
+          echo 'DETERMINISTIC_BUILD=PASS'
+          npm audit --omit=dev
+
+      - name: Preview source safety guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          roots=(
+            public/local/digieranative
+            public/local/digieraoffice
+            public/local/worksheetlibrary
+            public/mod/worksheetgrader
+          )
+          ! grep -RInaE \
+            --exclude='package-lock.json' \
+            '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|password[[:space:]]*=|secret[[:space:]]*=|api[_-]?key[[:space:]]*=)' \
+            "${roots[@]}"
+          ! grep -RIl '/root/digiera' "${roots[@]}"
+          test -f public/mod/worksheetgrader/backup/moodle2/backup_worksheetgrader_activity_task.class.php
+          test -f public/mod/worksheetgrader/backup/moodle2/restore_worksheetgrader_activity_task.class.php
+          echo 'SOURCE_SAFETY_GUARDS=PASS'
