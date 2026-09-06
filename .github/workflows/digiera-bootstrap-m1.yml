@@ -1,0 +1,100 @@
+name: DIGIERA Bootstrap Native M1
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - digiera/native-m1
+    paths:
+      - '.digiera/bootstrap/**'
+      - '.github/workflows/digiera-bootstrap-m1.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct verified M1 source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          B=.digiera/bootstrap
+          OUT=/tmp/digiera-m1.b64
+          : > "$OUT"
+
+          for f in a00 a01 a02 b00 b01 b02 c00; do
+            tr -d '[:space:]' < "$B/$f" >> "$OUT"
+          done
+
+          # c01 contains one transport whitespace character; base64 source itself has none.
+          tr -d '[:space:]' < "$B/c01" >> "$OUT"
+
+          for f in c02 d00; do
+            tr -d '[:space:]' < "$B/$f" >> "$OUT"
+          done
+
+          # d01 is reconstructed from the two verified 4 KiB halves.
+          cat "$B/d01a" "$B/d01b" >> "$OUT"
+
+          for f in d02 e00; do
+            tr -d '[:space:]' < "$B/$f" >> "$OUT"
+          done
+
+          base64 --decode "$OUT" > /tmp/digiera-m1.tar.gz
+          echo '51c8394d8cab440a2aeae1ce7505caa691f3b7d7d430bcd1f9a83c23560a88b9  /tmp/digiera-m1.tar.gz' | sha256sum -c -
+          tar -tzf /tmp/digiera-m1.tar.gz >/dev/null
+          echo 'BOOTSTRAP_ARCHIVE_CONTRACT=PASS'
+
+      - name: Install DIGIERA plugin source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/digiera-m1
+          mkdir -p /tmp/digiera-m1
+          tar -xzf /tmp/digiera-m1.tar.gz -C /tmp/digiera-m1
+
+          rm -rf local/digieranative local/worksheetlibrary local/digieraoffice
+          cp -a /tmp/digiera-m1/public/local/digieranative local/
+          cp -a /tmp/digiera-m1/public/local/worksheetlibrary local/
+          cp -a /tmp/digiera-m1/public/local/digieraoffice local/
+
+          cp /tmp/digiera-m1/.github/workflows/digiera-native-ci.yml .github/workflows/digiera-native-ci.yml
+
+          sed -i \
+            -e 's#digiera/native-worksheet#digiera/native-m1#g' \
+            -e 's#public/local/#local/#g' \
+            -e 's#public/admin/#admin/#g' \
+            -e 's#public/phpunit.xml#phpunit.xml#g' \
+            .github/workflows/digiera-native-ci.yml
+
+          test -f local/digieranative/client/src/autosave.js
+          test -f local/worksheetlibrary/classes/service/native_version_service.php
+          test -f local/worksheetlibrary/db/upgrade.php
+          test -f .github/workflows/digiera-native-ci.yml
+          grep -Fq 'digiera/native-m1' .github/workflows/digiera-native-ci.yml
+          ! grep -Fq 'public/local/' .github/workflows/digiera-native-ci.yml
+          echo 'DIGIERA_SOURCE_INSTALL=PASS'
+
+      - name: Commit canonical M1 source and remove transport chunks
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          git add local/digieranative local/worksheetlibrary local/digieraoffice .github/workflows/digiera-native-ci.yml
+          git rm -r .digiera/bootstrap
+          git rm .github/workflows/digiera-bootstrap-m1.yml
+
+          git commit -m 'feat(native): bootstrap M1 worksheet source'
+          git push origin HEAD:digiera/native-m1
