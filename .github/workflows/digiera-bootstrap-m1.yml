@@ -16,35 +16,110 @@ jobs:
   bootstrap:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout branch
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Reconstruct verified M1 source archive
         shell: bash
         run: |
           set -euo pipefail
           B=.digiera/bootstrap
-          OUT=/tmp/digiera-m1.b64
-          : > "$OUT"
+          PREFIX=/tmp/digiera-prefix.b64
+          B00=/tmp/digiera-b00.b64
+          SUFFIX=/tmp/digiera-suffix.b64
 
-          for f in a00 a01 a02 b00 b01 b02 c00; do
-            tr -d '[:space:]' < "$B/$f" >> "$OUT"
-          done
-          tr -d '[:space:]' < "$B/c01" >> "$OUT"
-          for f in c02 d00; do
-            tr -d '[:space:]' < "$B/$f" >> "$OUT"
-          done
-          cat "$B/d01a" "$B/d01b" >> "$OUT"
-          for f in d02 e00; do
-            tr -d '[:space:]' < "$B/$f" >> "$OUT"
+          : > "$PREFIX"
+          : > "$B00"
+          : > "$SUFFIX"
+
+          for f in a00 a01 a02; do
+            tr -d '[:space:]' < "$B/$f" >> "$PREFIX"
           done
 
-          base64 --decode "$OUT" > /tmp/digiera-m1.tar.gz
+          tr -d '[:space:]' < "$B/b00" > "$B00"
+
+          for f in b01 b02 c00 c01 c02 d00 d01a d01b d02 e00; do
+            tr -d '[:space:]' < "$B/$f" >> "$SUFFIX"
+          done
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64
+          import hashlib
+          import itertools
+          import string
+
+          want = '51c8394d8cab440a2aeae1ce7505caa691f3b7d7d430bcd1f9a83c23560a88b9'
+          prefix = Path('/tmp/digiera-prefix.b64').read_text().strip()
+          b00 = Path('/tmp/digiera-b00.b64').read_text().strip()
+          suffix = Path('/tmp/digiera-suffix.b64').read_text().strip()
+          alphabet = string.ascii_uppercase + string.ascii_lowercase + string.digits + '+/'
+
+          assembled = prefix + b00 + suffix
+          print(f'PREFIX_BASE64_CHARS={len(prefix)}')
+          print(f'B00_BASE64_CHARS={len(b00)}')
+          print(f'SUFFIX_BASE64_CHARS={len(suffix)}')
+          print(f'CURRENT_BASE64_CHARS={len(assembled)}')
+          print(f'CURRENT_BASE64_MOD4={len(assembled) % 4}')
+
+          invalid = sorted(set(assembled) - set(alphabet + '='))
+          if invalid:
+              raise SystemExit(f'INVALID_BASE64_CHARACTERS={invalid!r}')
+
+          def digest_for(encoded: str):
+              try:
+                  raw = base64.b64decode(encoded, validate=True)
+              except Exception:
+                  return None, None
+              return hashlib.sha256(raw).hexdigest(), raw
+
+          digest, raw = digest_for(assembled)
+          if digest == want:
+              Path('/tmp/digiera-m1.tar.gz').write_bytes(raw)
+              print('BOOTSTRAP_RECOVERY=NOT_NEEDED')
+              raise SystemExit(0)
+
+          # Transport chunk b00 is the only chunk whose effective length is not
+          # quartet-aligned. First test a single accidental extra character.
+          if len(assembled) % 4 == 1:
+              for i in range(len(b00)):
+                  candidate = prefix + b00[:i] + b00[i + 1:] + suffix
+                  digest, raw = digest_for(candidate)
+                  if digest == want:
+                      Path('/tmp/digiera-m1.tar.gz').write_bytes(raw)
+                      print(f'BOOTSTRAP_RECOVERY=REMOVED_B00_CHAR:{i}')
+                      raise SystemExit(0)
+
+          # The original b00 transport write was truncated at its tail by three
+          # base64 characters. Recover those three bytes deterministically by
+          # matching the already-recorded SHA-256 of the source archive.
+          if len(assembled) % 4 == 1 and b00:
+              fixed_head_b64 = prefix + b00[:-1]
+              quartet_first = b00[-1]
+              head = base64.b64decode(fixed_head_b64, validate=True)
+              tail = base64.b64decode(suffix, validate=True)
+              prefix_hash = hashlib.sha256(head)
+
+              for chars in itertools.product(alphabet, repeat=3):
+                  quartet = quartet_first + ''.join(chars)
+                  middle = base64.b64decode(quartet, validate=True)
+                  h = prefix_hash.copy()
+                  h.update(middle)
+                  h.update(tail)
+                  if h.hexdigest() == want:
+                      raw = head + middle + tail
+                      Path('/tmp/digiera-m1.tar.gz').write_bytes(raw)
+                      print('BOOTSTRAP_RECOVERY=INSERTED_B00_TAIL:' + ''.join(chars))
+                      raise SystemExit(0)
+
+          raise SystemExit('BOOTSTRAP_ARCHIVE_RECOVERY_FAILED')
+          PY
+
           echo '51c8394d8cab440a2aeae1ce7505caa691f3b7d7d430bcd1f9a83c23560a88b9  /tmp/digiera-m1.tar.gz' | sha256sum -c -
           tar -tzf /tmp/digiera-m1.tar.gz >/dev/null
           echo 'BOOTSTRAP_ARCHIVE_CONTRACT=PASS'
