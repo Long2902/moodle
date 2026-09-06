@@ -39,9 +39,21 @@ jobs:
         uses: actions/checkout@v4
 
       - name: PHP syntax gate
+        shell: bash
         run: |
           set -euo pipefail
-          find public/local/digieramedia public/filter/digieramedia -type f -name '*.php' -print0 2>/dev/null \
+          roots=(public/local/digieramedia public/filter/digieramedia)
+          existing=()
+          for root in "${roots[@]}"; do
+            if [ -d "$root" ]; then
+              existing+=("$root")
+            fi
+          done
+          if [ ${#existing[@]} -eq 0 ]; then
+            echo 'No DIGIERA Media PHP roots found.' >&2
+            exit 1
+          fi
+          find "${existing[@]}" -type f -name '*.php' -print0 \
             | sort -z | xargs -0 -r -n1 php -l
 
       - name: Setting up Moodle PHPUnit
