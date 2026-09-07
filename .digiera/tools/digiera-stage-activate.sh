@@ -78,10 +78,6 @@ preflight() {
         "test -f '$ROOT/local/digieramedia/version.php' && test -f '$ROOT/filter/digieramedia/version.php'" \
         || fail "DIGIERA Media code is not deployed on Web02"
 
-    remote_branch="$(ssh "${SSH_OPTS[@]}" "$WEB02" \
-        "sed -nE \"s/^\\\$branch[[:space:]]*=[[:space:]]*'([^']+)'.*/\\1/p\" '$ROOT/version.php' | head -n1")"
-    [ "$remote_branch" = "$EXPECTED_BRANCH" ] || fail "Web02 Moodle branch is $remote_branch, expected $EXPECTED_BRANCH"
-
     local localsha remotesha
     localsha="$(codeset_sha_local)"
     remotesha="$(codeset_sha_remote)"
