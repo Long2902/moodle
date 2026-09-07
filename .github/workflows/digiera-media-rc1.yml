@@ -9,6 +9,7 @@ on:
       - 'public/filter/digieramedia/**'
       - 'public/lib/editor/tiny/plugins/digieramedia/**'
       - '.digiera/tests/digiera-media-rc1-contract.py'
+      - '.digiera/tools/digiera-stage-seed-pdf.php'
       - '.digiera/rc1/**'
       - '.github/workflows/digiera-media-rc1.yml'
   workflow_dispatch:
@@ -42,6 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 .digiera/tests/digiera-media-rc1-contract.py
+          php -l .digiera/tools/digiera-stage-seed-pdf.php
           find public/local/digieramedia public/filter/digieramedia public/lib/editor/tiny/plugins/digieramedia -type f -name '*.php' -print0 | sort -z | xargs -0 -r -n1 php -l
           find public/lib/editor/tiny/plugins/digieramedia/amd/src -type f -name '*.js' -print0 | sort -z | xargs -0 -r -n1 node --check
       - name: Build TinyMCE AMD
@@ -90,6 +92,8 @@ jobs:
           tar --sort=name --mtime='UTC 2026-09-07' --owner=0 --group=0 --numeric-owner -czf .digiera/dist/rc1/DIGIERA_MEDIA_MOODLE51_RC1_FASTTRACK.tgz -C public local/digieramedia filter/digieramedia lib/editor/tiny/plugins/digieramedia
           (cd .digiera/dist/rc1 && sha256sum DIGIERA_MEDIA_MOODLE51_RC1_FASTTRACK.tgz > DIGIERA_MEDIA_MOODLE51_RC1_FASTTRACK.sha256)
           cp .digiera/rc1/INSTALL_AND_SMOKE.md .digiera/dist/rc1/
+          cp .digiera/tools/digiera-stage-seed-pdf.php .digiera/dist/rc1/
+          printf 'source_commit=%s\nworkflow_run=%s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > .digiera/dist/rc1/BUILD_INFO.txt
       - name: Verify release archive
         shell: bash
         run: |
@@ -103,6 +107,8 @@ jobs:
           grep -Fxq 'lib/editor/tiny/plugins/digieramedia/amd/build/plugin.min.js' "$listing"
           grep -Fxq 'lib/editor/tiny/plugins/digieramedia/amd/build/modal.min.js' "$listing"
           grep -Fxq 'lib/editor/tiny/plugins/digieramedia/amd/build/reference_component.min.js' "$listing"
+          test -f .digiera/dist/rc1/digiera-stage-seed-pdf.php
+          test -f .digiera/dist/rc1/BUILD_INFO.txt
           (cd .digiera/dist/rc1 && sha256sum -c DIGIERA_MEDIA_MOODLE51_RC1_FASTTRACK.sha256)
       - name: Upload RC1 artifact
         uses: actions/upload-artifact@v4
