@@ -34,7 +34,9 @@ trap on_error ERR
 run_moodle_cli() {
     local script="$1"
     shift
-    runuser -u www-data -- sh -c "cd '$ROOT' && exec /usr/bin/php '$script' \"\$@\"" sh "$@"
+    runuser -u www-data -- bash -c \
+        'cd "$1"; shift; exec /usr/bin/php "$@"' \
+        bash "$ROOT" "$script" "$@"
 }
 
 codeset_sha_local() {
@@ -42,12 +44,12 @@ codeset_sha_local() {
         cd "$ROOT"
         find local/digieramedia filter/digieramedia -type f -print0 \
             | sort -z | xargs -0 sha256sum
-    ) | sha256sum | awk '{print $1}'
+    ) | sha256sum | cut -d' ' -f1
 }
 
 codeset_sha_remote() {
     ssh "${SSH_OPTS[@]}" "$WEB02" \
-        "cd '$ROOT' && find local/digieramedia filter/digieramedia -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | awk '{print \\$1}'"
+        "cd '$ROOT' && find local/digieramedia filter/digieramedia -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1"
 }
 
 plugin_source_version() {
@@ -76,6 +78,10 @@ preflight() {
         "test -f '$ROOT/local/digieramedia/version.php' && test -f '$ROOT/filter/digieramedia/version.php'" \
         || fail "DIGIERA Media code is not deployed on Web02"
 
+    remote_branch="$(ssh "${SSH_OPTS[@]}" "$WEB02" \
+        "sed -nE \"s/^\\\$branch[[:space:]]*=[[:space:]]*'([^']+)'.*/\\1/p\" '$ROOT/version.php' | head -n1")"
+    [ "$remote_branch" = "$EXPECTED_BRANCH" ] || fail "Web02 Moodle branch is $remote_branch, expected $EXPECTED_BRANCH"
+
     local localsha remotesha
     localsha="$(codeset_sha_local)"
     remotesha="$(codeset_sha_remote)"
@@ -102,14 +108,24 @@ wait_for_cron_idle() {
     fail "moodle-cron.service did not become idle within 90 seconds"
 }
 
-configure_filter() {
-    local helper=/tmp/digiera-stage-enable-filter.php
+configure_and_verify_runtime() {
+    local helper=/tmp/digiera-stage-runtime.php
     cat > "$helper" <<'PHP'
 <?php
 
 define('CLI_SCRIPT', true);
 require $argv[1];
 require_once($CFG->libdir . '/filterlib.php');
+
+$expectedlocal = $argv[2];
+$expectedfilter = $argv[3];
+$localversion = (string)get_config('local_digieramedia', 'version');
+$filterversion = (string)get_config('filter_digieramedia', 'version');
+
+if ($localversion !== $expectedlocal || $filterversion !== $expectedfilter) {
+    fwrite(STDERR, "Unexpected installed plugin versions: local={$localversion}, filter={$filterversion}\n");
+    exit(2);
+}
 
 set_config('cdnbaseurl', 'https://cdn.digiera.vn', 'local_digieramedia');
 set_config('pdfviewerurl', 'https://cdn.digiera.vn/pdfjs/web/viewer.html', 'local_digieramedia');
@@ -125,66 +141,59 @@ if (!$record || (int)$record->active !== TEXTFILTER_ON) {
     exit(2);
 }
 
+echo "LOCAL_DB_VERSION={$localversion}\n";
+echo "FILTER_DB_VERSION={$filterversion}\n";
 echo "FILTER_DIGIERAMEDIA=ON\n";
 echo "CDN_BASE=" . get_config('local_digieramedia', 'cdnbaseurl') . "\n";
 echo "PDF_VIEWER=" . get_config('local_digieramedia', 'pdfviewerurl') . "\n";
 PHP
     chmod 0644 "$helper"
-    runuser -u www-data -- php "$helper" "$ROOT/config.php"
+    runuser -u www-data -- php "$helper" "$ROOT/config.php" "$EXPECTED_LOCAL_VERSION" "$EXPECTED_FILTER_VERSION"
     rm -f "$helper"
 }
 
 preflight
 
 echo
- echo "===== STOP CRON TIMER ====="
+echo "===== STOP CRON TIMER ====="
 systemctl stop moodle-cron.timer
 CRON_STOPPED=1
 wait_for_cron_idle
 
 echo
- echo "===== ENABLE MAINTENANCE ====="
+echo "===== ENABLE MAINTENANCE ====="
 run_moodle_cli admin/cli/maintenance.php --enable
 MAINTENANCE=1
 
 echo
- echo "===== MOODLE UPGRADE ====="
+echo "===== MOODLE UPGRADE ====="
 run_moodle_cli admin/cli/upgrade.php --non-interactive
 
 echo
- echo "===== VERIFY INSTALLED VERSIONS ====="
-localdbver="$(run_moodle_cli admin/cli/cfg.php --component=local_digieramedia --name=version | tail -n1 | tr -d '\r')"
-filterdbver="$(run_moodle_cli admin/cli/cfg.php --component=filter_digieramedia --name=version | tail -n1 | tr -d '\r')"
-echo "LOCAL_DB_VERSION=$localdbver"
-echo "FILTER_DB_VERSION=$filterdbver"
-[ "$localdbver" = "$EXPECTED_LOCAL_VERSION" ] || fail "local_digieramedia DB version verification failed"
-[ "$filterdbver" = "$EXPECTED_FILTER_VERSION" ] || fail "filter_digieramedia DB version verification failed"
+echo "===== VERIFY RUNTIME + ENABLE PDF FILTER ====="
+configure_and_verify_runtime
 
 echo
- echo "===== ENABLE PDF FILTER ====="
-configure_filter
-
-echo
- echo "===== PURGE CACHES ====="
+echo "===== PURGE CACHES ====="
 run_moodle_cli admin/cli/purge_caches.php
 
 echo
- echo "===== RELOAD PHP-FPM ON BOTH NODES ====="
+echo "===== RELOAD PHP-FPM ON BOTH NODES ====="
 systemctl reload php8.3-fpm
 ssh "${SSH_OPTS[@]}" "$WEB02" "systemctl reload php8.3-fpm"
 
 echo
- echo "===== DISABLE MAINTENANCE ====="
+echo "===== DISABLE MAINTENANCE ====="
 run_moodle_cli admin/cli/maintenance.php --disable
 MAINTENANCE=0
 
 echo
- echo "===== START CRON TIMER ====="
+echo "===== START CRON TIMER ====="
 systemctl start moodle-cron.timer
 CRON_STOPPED=0
 
 echo
- echo "===== FINAL STATUS ====="
+echo "===== FINAL STATUS ====="
 systemctl is-active nginx php8.3-fpm moodle-cron.timer
 ssh "${SSH_OPTS[@]}" "$WEB02" "systemctl is-active nginx php8.3-fpm"
 
