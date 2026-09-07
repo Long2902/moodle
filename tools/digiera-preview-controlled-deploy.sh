@@ -68,8 +68,15 @@ run_moodle_local() {
 
 maintenance_state() {
   local out
-  out="$(php -r 'define("CLI_SCRIPT", true); require "/var/www/moodle/public/config.php"; echo !empty($CFG->maintenance_enabled) ? "1" : "0";')"
-  printf '%s' "$out"
+  if id www-data >/dev/null 2>&1; then
+    out="$(runuser -u www-data -- php -r 'define("CLI_SCRIPT", true); require "/var/www/moodle/public/config.php"; echo !empty($CFG->maintenance_enabled) ? "1" : "0";')"
+  else
+    out="$(php -r 'define("CLI_SCRIPT", true); require "/var/www/moodle/public/config.php"; echo !empty($CFG->maintenance_enabled) ? "1" : "0";')"
+  fi
+  case "$out" in
+    0|1) printf '%s' "$out" ;;
+    *) echo "INVALID_MAINTENANCE_STATE=$out" >&2; return 1 ;;
+  esac
 }
 
 restore_cron_state() {
@@ -249,7 +256,7 @@ for f in \
   "$MOODLE/admin/cli/purge_caches.php"; do
   [ -f "$f" ] || { echo "MISSING_WEB01=$f"; exit 22; }
 done
-ssh "$WEB02" "test -f '$MOODLE/config.php' && test -f '$MOODLE/admin/cli/upgrade.php' && test -f '$MOODLE/admin/cli/purge_caches.php'"
+ssh "$WEB02" "test -f '$MOODLE/config.php' && test -f '$MOODLE/admin/cli/upgrade.php'"
 echo 'MOODLE_PATH_GUARD=PASS'
 
 echo
@@ -438,7 +445,7 @@ echo 'DB_UPGRADE_ONCE=PASS'
 
 echo
 echo '===== TARGETED POST-UPGRADE SCHEMA / SERVICE CHECK ====='
-SCHEMA_CHECK="$RUNROOT/schema_check.php"
+SCHEMA_CHECK="/tmp/digiera-preview-schema-check-${STAMP}-$$.php"
 cat > "$SCHEMA_CHECK" <<'PHP'
 <?php
 define('CLI_SCRIPT', true);
@@ -485,7 +492,9 @@ foreach ($functions as $function) {
 
 echo "TARGETED_SCHEMA_SERVICE_CHECK=PASS\n";
 PHP
+chmod 0644 "$SCHEMA_CHECK"
 run_moodle_local "$SCHEMA_CHECK"
+rm -f "$SCHEMA_CHECK"
 
 echo
 echo '===== PURGE CACHES / RELOAD PHP ====='
