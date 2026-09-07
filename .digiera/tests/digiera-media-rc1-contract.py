@@ -31,6 +31,25 @@ def test_tiny_modal_contract():
         assert label in tpl
     assert tpl.count('digiera-media-modal__column') >= 3
 
+def test_modal_matches_approved_mockup_without_design_badge():
+    tpl = read('public/lib/editor/tiny/plugins/digieramedia/templates/modal.mustache')
+    css = read('public/lib/editor/tiny/plugins/digieramedia/styles.css')
+    ui = read('public/lib/editor/tiny/plugins/digieramedia/amd/src/ui.js')
+
+    assert 'Phương án A' not in tpl
+    assert 'Modal 3 cột (Khuyến nghị)' not in tpl
+    assert 'tiny-digieramedia__title' in tpl
+    assert 'tiny-digieramedia__dropzone' in tpl
+    assert 'data-region="upload-queue"' in tpl
+    assert 'data-region="type-filter"' in tpl
+    assert 'data-region="sort"' in tpl
+    assert 'data-region="media-list"' in tpl
+    assert 'data-region="preview"' in tpl
+    assert 'Tùy chọn nâng cao' in tpl
+    assert 'grid-template-columns: 220px minmax(0, 1fr) 320px' in css
+    assert 'max-width: 1180px' in css
+    assert 'tiny-digieramedia__card' in ui
+
 def test_modal_action_separated_from_default_modal_module():
     commands = read('public/lib/editor/tiny/plugins/digieramedia/amd/src/commands.js')
     modal = read('public/lib/editor/tiny/plugins/digieramedia/amd/src/modal.js')
