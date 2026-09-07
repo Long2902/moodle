@@ -134,3 +134,24 @@ After smoke:
 
 - If any step fails: record exact node, URL/course/page, user role, browser console/network symptom, PHP/Moodle log excerpt, and the RC1 `BUILD_INFO.txt` values; fix on the RC1 branch and reissue one batch artifact.
 - If the full smoke path passes on both nodes: snapshot the evidence in a new versioned Spec Kit resume point, then proceed to the next RC batch (live R2 upload + strict reference reconciliation first).
+
+## 9. Deployment evidence captured on Web01 — 2026-09-07
+
+Operator preflight was executed on `vm-c47e0dd9` (Web01; established topology address `10.0.10.11`) using the final smoke-ready ZIP.
+
+Observed and verified:
+
+- Moodle root `/var/www/moodle/public` exists.
+- PHP CLI: `8.3.6`.
+- Outer artifact SHA256 matched exactly: `7247b82a722d231b0c455a50a8745d5729e264dadd7f9c6bc89e0eecb62b66ee`.
+- `unzip -t` reported no compressed-data errors.
+- `BUILD_INFO.txt` matched `source_commit=6134eabe8fe28a7245beef995fa380161cec93b4` and `workflow_run=34092280998`.
+- Portable inner checksum verified: `DIGIERA_MEDIA_MOODLE51_RC1_FASTTRACK.tgz: OK`.
+- Artifact contains all six required operational files.
+- None of the three DIGIERA Media plugin trees are currently installed on Web01 (`local/digieramedia`, `filter/digieramedia`, `lib/editor/tiny/plugins/digieramedia`). Therefore the pre-RC1 Web01 plugin snapshot correctly contains only its checksum manifest.
+- Web01 Moodle cron timer is active; the cron service was observed in `activating` state during the probe, so deployment must stop the timer and wait for the current service to quiesce before maintenance/code install.
+- Snapshot path created on Web01: `/root/DIGIERA_MEDIA_PRE_RC1_20260907-135653`.
+- Alias lookup for `moodle-web02` returned nothing and SSH by alias failed with `Could not resolve hostname moodle-web02`. This is consistent with the previously established topology: Web02 must be administered from Web01 using IP `10.0.10.12` (`ssh root@10.0.10.12`); the verified Web02 hostname is `moodle-web02`.
+- No Moodle code, database schema, maintenance state, cron configuration, or Web02 state was changed by this preflight.
+
+Immediate next operation: reach Web02 at `10.0.10.12`, verify Moodle/plugin state, create its rollback snapshot, copy the exact verified RC1 artifact, and re-run SHA/TGZ verification there before any maintenance/code installation.
