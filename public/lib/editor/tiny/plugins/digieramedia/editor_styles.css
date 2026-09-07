@@ -1,0 +1,10 @@
+.digiera-media-reference {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .35rem .55rem;
+    border: 1px solid #ced4da;
+    border-radius: .45rem;
+    background: #f8f9fa;
+    cursor: default;
+}

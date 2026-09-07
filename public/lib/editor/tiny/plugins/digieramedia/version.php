@@ -2,7 +2,7 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'local_digieramedia';
+$plugin->component = 'tiny_digieramedia';
 $plugin->version = 2026090701;
 $plugin->requires = 2025100600;
 $plugin->maturity = MATURITY_RC;

@@ -1,0 +1,7 @@
+.digiera-media { max-width: 100%; }
+.digiera-media-video video,
+.digiera-media-image img { max-width: 100%; }
+.digiera-media-audio audio { max-width: 100%; }
+.digiera-media-file { padding: .75rem 1rem; border: 1px solid #dee2e6; border-radius: .5rem; }
+.digiera-media-file__meta { color: #6c757d; font-size: .875rem; }
+.digiera-media-unavailable { padding: .75rem 1rem; border: 1px solid #f0ad4e; border-radius: .5rem; }

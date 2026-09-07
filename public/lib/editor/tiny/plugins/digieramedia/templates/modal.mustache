@@ -1,0 +1,37 @@
+{{< core/modal }}
+    {{$title}}Thư viện học liệu DIGIERA{{/title}}
+    {{$body}}
+    <div class="tiny-digieramedia">
+        <div class="tiny-digieramedia__columns">
+            <aside class="digiera-media-modal__column tiny-digieramedia__nav" aria-label="Điều hướng học liệu">
+                <button type="button" class="is-active" data-tab="library">Thư viện</button>
+                <button type="button" data-tab="recent">Đã dùng gần đây</button>
+                <button type="button" data-tab="trash">Thùng rác</button>
+                <button type="button" data-tab="library">Tải lên & chèn</button>
+            </aside>
+            <section class="digiera-media-modal__column tiny-digieramedia__center">
+                <div class="tiny-digieramedia__upload">
+                    <strong>Tải lên & chèn</strong>
+                    {{#canupload}}
+                        <div class="tiny-digieramedia__uploadnote">RC1 fast-track: giao diện hàng đợi đã sẵn sàng; live R2 upload chỉ bật sau khi cấu hình R2 được smoke-test.</div>
+                    {{/canupload}}
+                    {{^canupload}}
+                        <div class="tiny-digieramedia__uploadnote">Tài khoản hiện tại không có quyền upload.</div>
+                    {{/canupload}}
+                </div>
+                <label class="visually-hidden" for="digiera-media-search-{{uniqid}}">Tìm học liệu</label>
+                <input id="digiera-media-search-{{uniqid}}" class="form-control mb-2" type="search"
+                    placeholder="Tìm học liệu…" data-region="search">
+                <div class="tiny-digieramedia__list" data-region="media-list" aria-live="polite"></div>
+            </section>
+            <aside class="digiera-media-modal__column tiny-digieramedia__preview" data-region="preview"></aside>
+        </div>
+        <div data-region="status" aria-live="assertive"></div>
+    </div>
+    {{/body}}
+    {{$footer}}
+        <button type="button" class="btn btn-secondary" data-action="cancel">Hủy</button>
+        <button type="button" class="btn btn-outline-primary" data-action="library-only">Chỉ lưu vào thư viện</button>
+        <button type="button" class="btn btn-primary" data-action="save" disabled>Chèn vào bài</button>
+    {{/footer}}
+{{/ core/modal }}
