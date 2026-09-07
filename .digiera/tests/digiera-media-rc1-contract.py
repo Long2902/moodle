@@ -60,3 +60,10 @@ def test_tiny_uses_moodle_plugin_option_names():
     assert 'getPluginOptionName' in options
     for key in ['enabled', 'contextid', 'courseid', 'canupload']:
         assert repr(key) in options or f'"{key}"' in options
+
+if __name__ == '__main__':
+    tests = [value for name, value in sorted(globals().items()) if name.startswith('test_') and callable(value)]
+    for test in tests:
+        test()
+        print(f'PASS {test.__name__}')
+    print(f'RC1_CONTRACT_PASS={len(tests)}')
