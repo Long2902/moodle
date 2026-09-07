@@ -7,6 +7,7 @@ on:
     paths:
       - 'public/local/digieramedia/**'
       - 'public/filter/digieramedia/**'
+      - '.digiera/tools/**'
       - '.github/workflows/digiera-media-stage-ci.yml'
   workflow_dispatch:
 
@@ -38,7 +39,7 @@ jobs:
       - name: Checkout stage branch
         uses: actions/checkout@v4
 
-      - name: PHP syntax gate
+      - name: Syntax gate
         shell: bash
         run: |
           set -euo pipefail
@@ -55,6 +56,16 @@ jobs:
           fi
           find "${existing[@]}" -type f -name '*.php' -print0 \
             | sort -z | xargs -0 -r -n1 php -l
+          if compgen -G '.digiera/tools/*.sh' >/dev/null; then
+            for script in .digiera/tools/*.sh; do
+              bash -n "$script"
+            done
+          fi
+          if compgen -G '.digiera/tools/*.php' >/dev/null; then
+            for script in .digiera/tools/*.php; do
+              php -l "$script"
+            done
+          fi
 
       - name: Setting up Moodle PHPUnit
         env:
