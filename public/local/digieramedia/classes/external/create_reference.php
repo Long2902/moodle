@@ -38,9 +38,10 @@ final class create_reference extends external_api {
         }
 
         $canviewall = has_capability('local/digieramedia:viewall', $context);
+        $visibility = (string)$media->visibility;
         $visible = (int)$media->owneruserid === (int)$USER->id
-            || (string)$media->visibility === 'GLOBAL'
-            || ((string)$media->visibility === 'COURSE' && $courseid > 0 && (int)$media->origincourseid === $courseid);
+            || in_array($visibility, ['GLOBAL', 'SHARED'], true)
+            || ($visibility === 'COURSE' && $courseid > 0 && (int)$media->origincourseid === $courseid);
         if (!$canviewall && !$visible) {
             throw new \required_capability_exception($context, 'local/digieramedia:view', 'nopermissions', '');
         }

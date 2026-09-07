@@ -51,7 +51,12 @@ final class search_media extends external_api {
         $sqlparams['mediastatus'] = $tab === 'trash' ? 'TRASHED' : 'ACTIVE';
 
         if (!$canviewall) {
-            $scope = ['m.owneruserid = :owneruserid', "m.visibility = 'GLOBAL'"];
+            // SHARED is the canonical cross-context library visibility used by seeded and reusable media.
+            $scope = [
+                'm.owneruserid = :owneruserid',
+                "m.visibility = 'GLOBAL'",
+                "m.visibility = 'SHARED'",
+            ];
             $sqlparams['owneruserid'] = (int)$USER->id;
             if ($courseid > 0) {
                 $scope[] = "(m.visibility = 'COURSE' AND m.origincourseid = :courseid)";

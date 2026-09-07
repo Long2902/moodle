@@ -42,6 +42,12 @@ def test_external_services_are_registered():
     assert 'local_digieramedia_search_media' in services
     assert 'local_digieramedia_create_reference' in services
 
+def test_shared_seed_visibility_is_insertable():
+    search = read('public/local/digieramedia/classes/external/search_media.php')
+    create = read('public/local/digieramedia/classes/external/create_reference.php')
+    assert "m.visibility = 'SHARED'" in search
+    assert "['GLOBAL', 'SHARED']" in create
+
 def test_renderer_covers_rc1_media_types():
     code = read('public/filter/digieramedia/classes/text_filter.php')
     for token in ['render_pdf', 'render_video', 'render_image', 'render_audio', 'render_generic']:
