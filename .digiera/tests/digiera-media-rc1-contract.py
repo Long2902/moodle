@@ -47,7 +47,7 @@ def test_modal_matches_approved_mockup_without_design_badge():
     assert 'data-region="preview"' in tpl
     assert 'Tùy chọn nâng cao' in tpl
     assert 'grid-template-columns: 220px minmax(0, 1fr) 320px' in css
-    assert 'max-width: 1180px' in css
+    assert 'max-width: 1280px' in css
     assert 'tiny-digieramedia__card' in ui
 
 def test_modal_action_separated_from_default_modal_module():
