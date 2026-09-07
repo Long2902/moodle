@@ -1,0 +1,1 @@
+This temporary note is intentionally superseded by the next atomic RC1 packaging commit.
