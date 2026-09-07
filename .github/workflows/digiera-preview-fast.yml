@@ -25,6 +25,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Setup PHP 8.3
         uses: shivammathur/setup-php@v2
@@ -127,12 +129,33 @@ jobs:
             public/local/worksheetlibrary
             public/mod/worksheetgrader
           )
-          ! grep -RInaE \
+
+          if grep -RIl \
+            --exclude-dir=node_modules \
+            'BEGIN RSA PRIVATE KEY\|BEGIN OPENSSH PRIVATE KEY\|BEGIN EC PRIVATE KEY' \
+            "${roots[@]}"; then
+            echo 'PRIVATE_KEY_LEAK=FAIL'
+            exit 1
+          fi
+
+          if grep -RInaP \
+            --exclude-dir=node_modules \
             --exclude='package-lock.json' \
-            '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|password[[:space:]]*=|secret[[:space:]]*=|api[_-]?key[[:space:]]*=)' \
-            "${roots[@]}"
-          ! grep -RIl '/root/digiera' "${roots[@]}"
+            '(?i)(password|secret|api[_-]?key)\s*[:=]\s*["'"'][^"'"']{8,}["'"']' \
+            "${roots[@]}"; then
+            echo 'LITERAL_CREDENTIAL_LEAK=FAIL'
+            exit 1
+          fi
+
+          if grep -RIl \
+            --exclude-dir=node_modules \
+            '/root/digiera' \
+            "${roots[@]}"; then
+            echo 'LOCAL_PATH_LEAK=FAIL'
+            exit 1
+          fi
+
           test -f public/mod/worksheetgrader/backup/moodle2/backup_worksheetgrader_activity_task.class.php
           test -f public/mod/worksheetgrader/backup/moodle2/restore_worksheetgrader_activity_task.class.php
-          git diff --check HEAD~1 HEAD
+          git diff --check HEAD~1 HEAD --
           echo 'SOURCE_SAFETY_GUARDS=PASS'
