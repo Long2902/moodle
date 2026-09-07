@@ -5,9 +5,7 @@ on:
     branches:
       - digiera/tiptap-v1-ci
     paths:
-      - public/local/digieranative/**
-      - public/local/worksheetlibrary/**
-      - public/mod/worksheetgrader/**
+      - tools/digiera-tiptap-v1.patch
       - .github/workflows/digiera-tiptap-v1-ci.yml
 
 permissions:
@@ -21,6 +19,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 2
+
+      - name: Apply isolated Tiptap V1 patch
+        run: |
+          test -f tools/digiera-tiptap-v1.patch
+          git apply --check tools/digiera-tiptap-v1.patch
+          git apply tools/digiera-tiptap-v1.patch
+          echo TIPTAP_V1_PATCH_APPLY=PASS
 
       - name: Setup Node
         uses: actions/setup-node@v4
