@@ -5,7 +5,7 @@ on:
     branches:
       - digiera/tiptap-v1-ci
     paths:
-      - tools/digiera-tiptap-v1.patch
+      - tools/digiera-tiptap-v1.patch.gz.b64
       - .github/workflows/digiera-tiptap-v1-ci.yml
 
 permissions:
@@ -22,9 +22,11 @@ jobs:
 
       - name: Apply isolated Tiptap V1 patch
         run: |
-          test -f tools/digiera-tiptap-v1.patch
-          git apply --check tools/digiera-tiptap-v1.patch
-          git apply tools/digiera-tiptap-v1.patch
+          test -f tools/digiera-tiptap-v1.patch.gz.b64
+          base64 -d tools/digiera-tiptap-v1.patch.gz.b64 | gzip -dc > /tmp/digiera-tiptap-v1.patch
+          sha256sum /tmp/digiera-tiptap-v1.patch
+          git apply --check /tmp/digiera-tiptap-v1.patch
+          git apply /tmp/digiera-tiptap-v1.patch
           echo TIPTAP_V1_PATCH_APPLY=PASS
 
       - name: Setup Node
