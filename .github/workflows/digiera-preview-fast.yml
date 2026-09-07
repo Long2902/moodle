@@ -123,37 +123,51 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          roots=(
-            public/local/digieranative
-            public/local/digieraoffice
-            public/local/worksheetlibrary
-            public/mod/worksheetgrader
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          roots = [
+              Path('public/local/digieranative'),
+              Path('public/local/digieraoffice'),
+              Path('public/local/worksheetlibrary'),
+              Path('public/mod/worksheetgrader'),
+          ]
+          private_markers = (
+              'BEGIN RSA PRIVATE KEY',
+              'BEGIN OPENSSH PRIVATE KEY',
+              'BEGIN EC PRIVATE KEY',
           )
+          credential = re.compile(
+              r'''(?i)\b(password|secret|api[_-]?key)\b\s*[:=]\s*(["'])([^"'\r\n]{8,})\2'''
+          )
+          violations = []
 
-          if grep -RIl \
-            --exclude-dir=node_modules \
-            'BEGIN RSA PRIVATE KEY\|BEGIN OPENSSH PRIVATE KEY\|BEGIN EC PRIVATE KEY' \
-            "${roots[@]}"; then
-            echo 'PRIVATE_KEY_LEAK=FAIL'
-            exit 1
-          fi
+          for root in roots:
+              for path in root.rglob('*'):
+                  if not path.is_file():
+                      continue
+                  if 'node_modules' in path.parts or path.name == 'package-lock.json':
+                      continue
+                  try:
+                      text = path.read_text(encoding='utf-8', errors='ignore')
+                  except OSError as exc:
+                      violations.append(f'READ_ERROR {path}: {exc}')
+                      continue
 
-          if grep -RInaP \
-            --exclude-dir=node_modules \
-            --exclude='package-lock.json' \
-            '(?i)(password|secret|api[_-]?key)\s*[:=]\s*["'"'][^"'"']{8,}["'"']' \
-            "${roots[@]}"; then
-            echo 'LITERAL_CREDENTIAL_LEAK=FAIL'
-            exit 1
-          fi
+                  if any(marker in text for marker in private_markers):
+                      violations.append(f'PRIVATE_KEY_LEAK {path}')
+                  if '/root/digiera' in text:
+                      violations.append(f'LOCAL_PATH_LEAK {path}')
+                  if credential.search(text):
+                      violations.append(f'LITERAL_CREDENTIAL_LEAK {path}')
 
-          if grep -RIl \
-            --exclude-dir=node_modules \
-            '/root/digiera' \
-            "${roots[@]}"; then
-            echo 'LOCAL_PATH_LEAK=FAIL'
-            exit 1
-          fi
+          if violations:
+              print('\n'.join(violations))
+              sys.exit(1)
+          print('SOURCE_CONTENT_SCAN=PASS')
+          PY
 
           test -f public/mod/worksheetgrader/backup/moodle2/backup_worksheetgrader_activity_task.class.php
           test -f public/mod/worksheetgrader/backup/moodle2/restore_worksheetgrader_activity_task.class.php
