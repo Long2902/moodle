@@ -1,7 +1,7 @@
 import {getString} from 'core/str';
 import {buttonName, component} from './common';
 import {getConfig} from './options';
-import {open} from './modal';
+import {open} from './ui';
 
 export const getSetup = async() => {
     const title = await getString('buttontitle', component);
