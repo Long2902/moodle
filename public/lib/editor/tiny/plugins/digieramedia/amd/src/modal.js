@@ -9,6 +9,14 @@ export default class DigieraMediaModal extends Modal {
         config.show = true;
         config.removeOnClose = true;
         super.configure(config);
+
+        this.getModal().addClass('tiny-digieramedia-dialog');
+        this.getModal().css({
+            '--bs-modal-width': '1280px',
+            'width': '92vw',
+            'max-width': '1280px',
+            'height': '85vh',
+        });
     }
 
     registerEventListeners() {
