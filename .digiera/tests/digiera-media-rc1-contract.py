@@ -11,6 +11,7 @@ REQUIRED = [
     'public/lib/editor/tiny/plugins/digieramedia/classes/plugininfo.php',
     'public/lib/editor/tiny/plugins/digieramedia/amd/src/plugin.js',
     'public/lib/editor/tiny/plugins/digieramedia/amd/src/modal.js',
+    'public/lib/editor/tiny/plugins/digieramedia/amd/src/ui.js',
     'public/lib/editor/tiny/plugins/digieramedia/amd/src/reference_component.js',
     'public/lib/editor/tiny/plugins/digieramedia/templates/modal.mustache',
     'public/lib/editor/tiny/plugins/digieramedia/styles.css',
@@ -29,6 +30,16 @@ def test_tiny_modal_contract():
     for label in ['Tải lên & chèn', 'Thư viện', 'Đã dùng gần đây', 'Thùng rác', 'Chỉ lưu vào thư viện', 'Chèn vào bài']:
         assert label in tpl
     assert tpl.count('digiera-media-modal__column') >= 3
+
+def test_modal_action_separated_from_default_modal_module():
+    commands = read('public/lib/editor/tiny/plugins/digieramedia/amd/src/commands.js')
+    modal = read('public/lib/editor/tiny/plugins/digieramedia/amd/src/modal.js')
+    ui = read('public/lib/editor/tiny/plugins/digieramedia/amd/src/ui.js')
+    assert "from './ui'" in commands
+    assert 'export const open' not in modal
+    assert 'export default class DigieraMediaModal' in modal
+    assert 'export const open' in ui
+    assert "from './modal'" in ui
 
 def test_marker_roundtrip_contract_present():
     js = read('public/lib/editor/tiny/plugins/digieramedia/amd/src/reference_component.js')
