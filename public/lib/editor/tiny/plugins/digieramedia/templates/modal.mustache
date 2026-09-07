@@ -1,34 +1,91 @@
 {{< core/modal }}
-    {{$title}}Thư viện học liệu DIGIERA{{/title}}
+    {{$title}}
+        <span class="tiny-digieramedia__title">
+            <span class="tiny-digieramedia__titleicon" aria-hidden="true">{{#pix}}i/folder, core{{/pix}}</span>
+            <span>Thư viện học liệu DIGIERA</span>
+        </span>
+    {{/title}}
+
     {{$body}}
     <div class="tiny-digieramedia">
         <div class="tiny-digieramedia__columns">
             <aside class="digiera-media-modal__column tiny-digieramedia__nav" aria-label="Điều hướng học liệu">
-                <button type="button" class="is-active" data-tab="library">Thư viện</button>
-                <button type="button" data-tab="recent">Đã dùng gần đây</button>
-                <button type="button" data-tab="trash">Thùng rác</button>
-                <button type="button" data-tab="library">Tải lên & chèn</button>
+                <button type="button" class="is-active" data-tab="library" data-view="upload">
+                    <span class="tiny-digieramedia__navicon" aria-hidden="true">↑</span>
+                    <span>Tải lên & chèn</span>
+                </button>
+                <button type="button" data-tab="library" data-view="library">
+                    <span class="tiny-digieramedia__navicon" aria-hidden="true">▣</span>
+                    <span>Thư viện</span>
+                </button>
+                <button type="button" data-tab="recent" data-view="recent">
+                    <span class="tiny-digieramedia__navicon" aria-hidden="true">◷</span>
+                    <span>Đã dùng gần đây</span>
+                </button>
+                <button type="button" class="tiny-digieramedia__navtrash" data-tab="trash" data-view="trash">
+                    <span class="tiny-digieramedia__navicon" aria-hidden="true">⌫</span>
+                    <span>Thùng rác</span>
+                </button>
             </aside>
+
             <section class="digiera-media-modal__column tiny-digieramedia__center">
-                <div class="tiny-digieramedia__upload">
-                    <strong>Tải lên & chèn</strong>
-                    {{#canupload}}
-                        <div class="tiny-digieramedia__uploadnote">RC1 fast-track: giao diện hàng đợi đã sẵn sàng; live R2 upload chỉ bật sau khi cấu hình R2 được smoke-test.</div>
-                    {{/canupload}}
-                    {{^canupload}}
-                        <div class="tiny-digieramedia__uploadnote">Tài khoản hiện tại không có quyền upload.</div>
-                    {{/canupload}}
+                <div class="tiny-digieramedia__scroll">
+                    <div class="tiny-digieramedia__dropzone" data-region="upload-dropzone">
+                        <div class="tiny-digieramedia__dropicon" aria-hidden="true">⇧</div>
+                        <div class="tiny-digieramedia__droptext">
+                            Kéo thả tệp vào đây hoặc <span>nhấp để chọn tệp</span>
+                        </div>
+                        <div class="tiny-digieramedia__dropsub">
+                            Hỗ trợ: PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, MP4, MP3, JPG, PNG
+                        </div>
+                        {{#canupload}}
+                            <div class="tiny-digieramedia__uploadnote">Live R2 upload sẽ được bật sau bước cấu hình/verify R2 của RC1.</div>
+                        {{/canupload}}
+                        {{^canupload}}
+                            <div class="tiny-digieramedia__uploadnote">Tài khoản hiện tại không có quyền upload.</div>
+                        {{/canupload}}
+                    </div>
+
+                    <div class="tiny-digieramedia__uploadqueue" data-region="upload-queue" aria-live="polite"></div>
+
+                    <div class="tiny-digieramedia__toolbar">
+                        <label class="tiny-digieramedia__search">
+                            <span class="visually-hidden">Tìm học liệu</span>
+                            <span class="tiny-digieramedia__searchicon" aria-hidden="true">⌕</span>
+                            <input class="form-control" type="search" placeholder="Tìm kiếm học liệu..." data-region="search">
+                        </label>
+                        <select class="form-select" data-region="type-filter" aria-label="Lọc theo định dạng">
+                            <option value="">Tất cả định dạng</option>
+                            <option value="pdf">PDF</option>
+                            <option value="video">Video</option>
+                            <option value="image">Hình ảnh</option>
+                            <option value="audio">Âm thanh</option>
+                            <option value="office">Office</option>
+                            <option value="generic">Tệp khác</option>
+                        </select>
+                        <select class="form-select" data-region="sort" aria-label="Sắp xếp học liệu">
+                            <option value="newest">Ngày mới nhất</option>
+                            <option value="oldest">Ngày cũ nhất</option>
+                            <option value="name">Tên A-Z</option>
+                        </select>
+                    </div>
+
+                    <div class="tiny-digieramedia__list" data-region="media-list" aria-live="polite"></div>
                 </div>
-                <label class="visually-hidden" for="digiera-media-search-{{uniqid}}">Tìm học liệu</label>
-                <input id="digiera-media-search-{{uniqid}}" class="form-control mb-2" type="search"
-                    placeholder="Tìm học liệu…" data-region="search">
-                <div class="tiny-digieramedia__list" data-region="media-list" aria-live="polite"></div>
             </section>
-            <aside class="digiera-media-modal__column tiny-digieramedia__preview" data-region="preview"></aside>
+
+            <aside class="digiera-media-modal__column tiny-digieramedia__preview" data-region="preview">
+                <div class="tiny-digieramedia__empty">Chọn một học liệu để xem thông tin.</div>
+                <details class="tiny-digieramedia__advanced">
+                    <summary>Tùy chọn nâng cao (Admin/KTV)</summary>
+                    <div class="tiny-digieramedia__advancedbody">Các thao tác quản trị nâng cao sẽ xuất hiện khi quyền và API tương ứng khả dụng.</div>
+                </details>
+            </aside>
         </div>
-        <div data-region="status" aria-live="assertive"></div>
+        <div class="tiny-digieramedia__status" data-region="status" aria-live="assertive"></div>
     </div>
     {{/body}}
+
     {{$footer}}
         <button type="button" class="btn btn-secondary" data-action="cancel">Hủy</button>
         <button type="button" class="btn btn-outline-primary" data-action="library-only">Chỉ lưu vào thư viện</button>
