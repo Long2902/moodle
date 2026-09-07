@@ -1,0 +1,8 @@
+<?php
+namespace local_worksheetlibrary\service;
+final class file_service {
+ public static function store_path(int $versionid,string $pathname,string $filename,string $mimetype=''): \stored_file { $fs=get_file_storage(); $ctx=\context_system::instance(); $fs->delete_area_files($ctx->id,'local_worksheetlibrary','content',$versionid); $record=['contextid'=>$ctx->id,'component'=>'local_worksheetlibrary','filearea'=>'content','itemid'=>$versionid,'filepath'=>'/','filename'=>$filename,'mimetype'=>$mimetype ?: mimeinfo('type', $filename)]; return $fs->create_file_from_pathname($record,$pathname); }
+ public static function store_string(int $versionid,string $bytes,string $filename,string $mimetype=''): \stored_file { $fs=get_file_storage(); $ctx=\context_system::instance(); $fs->delete_area_files($ctx->id,'local_worksheetlibrary','content',$versionid); return $fs->create_file_from_string(['contextid'=>$ctx->id,'component'=>'local_worksheetlibrary','filearea'=>'content','itemid'=>$versionid,'filepath'=>'/','filename'=>$filename,'mimetype'=>$mimetype],$bytes); }
+ public static function primary(int $versionid): ?\stored_file { $fs=get_file_storage(); foreach($fs->get_area_files(\context_system::instance()->id,'local_worksheetlibrary','content',$versionid,'id',false) as $f)return $f; return null; }
+ public static function clone_file(int $fromversion,int $toversion): void { $f=self::primary($fromversion); if(!$f)return; get_file_storage()->create_file_from_storedfile(['contextid'=>\context_system::instance()->id,'component'=>'local_worksheetlibrary','filearea'=>'content','itemid'=>$toversion,'filepath'=>'/','filename'=>$f->get_filename()],$f); }
+}

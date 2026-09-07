@@ -1,0 +1,144 @@
+import Ajax from 'core/ajax';
+import Notification from 'core/notification';
+
+const escapeHtml = (value) => String(value).replace(/[&<>'"]/g, character => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
+}[character]));
+
+export const init = (config) => {
+    const host = document.getElementById('wsg-team-builder');
+    if (!host) {
+        return;
+    }
+    let layout = config.layout || [];
+    const users = new Map((config.students || []).map(user => [Number(user.id), user]));
+    const locked = Boolean(config.locked);
+
+    const assigned = () => new Set(layout.flatMap(team => (team.members || []).map(Number)));
+
+    const userChip = (user, id, representative = false) => {
+        const element = document.createElement('div');
+        element.className = 'wsg-user-chip';
+        element.draggable = !locked;
+        element.dataset.userid = id;
+        element.innerHTML = `<span>${escapeHtml(user.name)}</span>${representative ?
+            '<span class="badge bg-primary">Đại diện</span>' : ''}`;
+        return element;
+    };
+
+    const syncDom = () => {
+        layout = layout.map((team, index) => {
+            const zone = host.querySelector(`[data-team="${index}"]`);
+            const members = zone ? [...zone.querySelectorAll('[data-userid]')]
+                .map(item => Number(item.dataset.userid)) : (team.members || []).map(Number);
+            const name = host.querySelector(`[data-name="${index}"]`)?.value || team.name || `Nhóm ${index + 1}`;
+            const representativeSelect = host.querySelector(`[data-repselect="${index}"]`);
+            let representativeuserid = representativeSelect && Number(representativeSelect.value) ?
+                Number(representativeSelect.value) : Number(team.representativeuserid || 0);
+            if (!members.includes(representativeuserid)) {
+                representativeuserid = members[0] || 0;
+            }
+            return {...team, name, members, representativeuserid};
+        });
+    };
+
+    const bind = () => {
+        host.querySelectorAll('[data-userid]').forEach(element => element.addEventListener('dragstart', event => {
+            event.dataTransfer.setData('text/plain', element.dataset.userid);
+        }));
+        host.querySelectorAll('.wsg-dropzone').forEach(zone => {
+            zone.addEventListener('dragover', event => event.preventDefault());
+            zone.addEventListener('drop', event => {
+                event.preventDefault();
+                const userid = Number(event.dataTransfer.getData('text/plain'));
+                const chip = host.querySelector(`[data-userid="${userid}"]`);
+                if (chip) {
+                    zone.appendChild(chip);
+                    syncDom();
+                    render();
+                }
+            });
+        });
+        host.querySelector('[data-action="add"]')?.addEventListener('click', () => {
+            syncDom();
+            layout.push({name: `Nhóm ${layout.length + 1}`, members: [], representativeuserid: 0});
+            render();
+        });
+        host.querySelectorAll('[data-remove]').forEach(button => button.addEventListener('click', () => {
+            syncDom();
+            layout.splice(Number(button.dataset.remove), 1);
+            render();
+        }));
+        host.querySelectorAll('[data-repselect]').forEach(select => select.addEventListener('change', syncDom));
+        host.querySelector('[data-action="save"]')?.addEventListener('click', async() => {
+            syncDom();
+            const state = host.querySelector('.wsg-save-state');
+            state.textContent = 'Đang lưu…';
+            try {
+                const requests = Ajax.call([{
+                    methodname: 'mod_worksheetgrader_save_team_layout',
+                    args: {sessionid: config.sessionid, layoutjson: JSON.stringify(layout)},
+                }]);
+                const result = await requests[0];
+                state.textContent = `Đã lưu ${result.teamcount} nhóm`;
+                Notification.addNotification({message: 'Đã lưu cách chia nhóm.', type: 'success'});
+                // Reload to receive real database team IDs and reveal the Open-session action.
+                window.setTimeout(() => window.location.reload(), 500);
+            } catch (error) {
+                state.textContent = 'Lỗi';
+                Notification.exception(error);
+            }
+        });
+    };
+
+    const render = () => {
+        const used = assigned();
+        host.innerHTML = `<div class="wsg-builder-toolbar">
+            <button type="button" class="btn btn-secondary" data-action="add">+ Thêm nhóm</button>
+            <button type="button" class="btn btn-primary" data-action="save">Lưu cách chia nhóm</button>
+            <span class="wsg-save-state" aria-live="polite"></span>
+        </div><div class="wsg-builder-grid">
+            <section class="wsg-user-pool"><h4>Chưa xếp nhóm</h4><div class="wsg-dropzone" data-team="pool"></div></section>
+            ${layout.map((team, index) => {
+                const options = '<option value="0">Tự chọn thành viên đầu tiên</option>' +
+                    (team.members || []).map(id => {
+                        const user = users.get(Number(id));
+                        return user ? `<option value="${id}" ${Number(team.representativeuserid) === Number(id) ?
+                            'selected' : ''}>${escapeHtml(user.name)}</option>` : '';
+                    }).join('');
+                return `<section class="wsg-team-card">
+                    <input class="form-control mb-2" data-name="${index}" value="${escapeHtml(team.name ||
+                        `Nhóm ${index + 1}`)}" ${locked ? 'disabled' : ''}>
+                    <div class="wsg-dropzone" data-team="${index}"></div>
+                    <label class="small mt-2">Học sinh đại diện
+                        <select class="form-select form-select-sm" data-repselect="${index}" ${locked ? 'disabled' : ''}>
+                            ${options}
+                        </select>
+                    </label>
+                    <button type="button" class="btn btn-link text-danger" data-remove="${index}" ${locked ?
+                        'disabled' : ''}>Xóa nhóm</button>
+                </section>`;
+            }).join('')}
+        </div>`;
+        const pool = host.querySelector('[data-team="pool"]');
+        users.forEach((user, id) => {
+            if (!used.has(id)) {
+                pool.appendChild(userChip(user, id));
+            }
+        });
+        layout.forEach((team, index) => {
+            const zone = host.querySelector(`[data-team="${index}"]`);
+            (team.members || []).forEach(id => {
+                const user = users.get(Number(id));
+                if (user) {
+                    zone.appendChild(userChip(user, Number(id), Number(team.representativeuserid) === Number(id)));
+                }
+            });
+        });
+        if (!locked) {
+            bind();
+        }
+    };
+
+    render();
+};

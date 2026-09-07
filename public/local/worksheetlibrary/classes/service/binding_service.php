@@ -1,0 +1,6 @@
+<?php
+namespace local_worksheetlibrary\service;
+final class binding_service {
+ public static function bind(int $itemid,int $courseid,int $sectionid=0): int { global $DB; $course=\get_course($courseid); if($sectionid){$s=$DB->get_record('course_sections',['id'=>$sectionid,'course'=>$courseid],'id',MUST_EXIST);} if($existing=$DB->get_record('wslib_binding',['itemid'=>$itemid,'courseid'=>$courseid,'sectionid'=>$sectionid]))return $existing->id; return $DB->insert_record('wslib_binding',(object)['itemid'=>$itemid,'courseid'=>$courseid,'sectionid'=>$sectionid,'sortorder'=>0,'visible'=>1,'timecreated'=>time()]); }
+ public static function for_place(int $courseid,int $sectionid=0,string $search=''): array { global $DB; $params=['courseid'=>$courseid,'sectionid'=>$sectionid]; $where='b.courseid=:courseid AND b.sectionid=:sectionid AND b.visible=1 AND i.archived=0 AND i.currentversionid>0'; if(trim($search)!==''){$where.=' AND '.$DB->sql_like('i.name',':q',false,false);$params['q']='%'.$DB->sql_like_escape(trim($search)).'%';} return $DB->get_records_sql("SELECT i.*,v.versionno,v.contenthash,v.filename,v.mimetype FROM {wslib_binding} b JOIN {wslib_item} i ON i.id=b.itemid JOIN {wslib_version} v ON v.id=i.currentversionid WHERE $where ORDER BY b.sortorder,i.name",$params); }
+}

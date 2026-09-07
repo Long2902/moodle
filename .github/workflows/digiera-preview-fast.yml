@@ -9,6 +9,7 @@ on:
       - 'public/local/digieraoffice/**'
       - 'public/local/worksheetlibrary/**'
       - 'public/mod/worksheetgrader/**'
+      - '.github/workflows/digiera-preview-fast.yml'
   workflow_dispatch:
 
 permissions:
@@ -38,7 +39,7 @@ jobs:
           cache: npm
           cache-dependency-path: public/local/digieranative/client/package-lock.json
 
-      - name: PHP lint
+      - name: PHP lint and XMLDB parse
         shell: bash
         run: |
           set -euo pipefail
@@ -53,9 +54,6 @@ jobs:
             public/mod/worksheetgrader \
             -name '*.php' -print0)
           echo "PHP_LINT_FILES=$count"
-
-      - name: XMLDB parse
-        run: |
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
           for path in [
@@ -66,10 +64,33 @@ jobs:
           print('XMLDB_PARSE=PASS')
           PY
 
-      - name: Native PHP standalone contracts
+      - name: Preview vertical-slice standalone contracts
+        shell: bash
         run: |
+          set -euo pipefail
           php public/local/digieranative/tests/standalone_validator.php
           php public/local/digieranative/tests/standalone_renderer.php
+          php public/local/worksheetlibrary/tests/native_version_service_standalone.php
+          node public/local/digieranative/client/tests/autosave-standalone.mjs
+          python3 public/local/worksheetlibrary/tests/native_ui_contract.py
+          php public/mod/worksheetgrader/tests/preview_vertical_slice_standalone.php
+          python3 public/mod/worksheetgrader/tests/native_preview_ui_contract.py
+
+      - name: JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=0
+          while IFS= read -r -d '' f; do
+            node --check "$f" >/dev/null
+            count=$((count+1))
+          done < <(find \
+            public/local/digieranative \
+            public/local/digieraoffice \
+            public/local/worksheetlibrary \
+            public/mod/worksheetgrader \
+            -name '*.js' -print0)
+          echo "JS_SYNTAX_FILES=$count"
 
       - name: Native JS tests and deterministic AMD build
         working-directory: public/local/digieranative/client
@@ -90,6 +111,7 @@ jobs:
           node --check "$amd"
           ! grep -a -q 'sourceMappingURL' "$amd"
           ! grep -a -q '/root/digiera' "$amd"
+          grep -a -q 'createAutosaveController' "$amd"
           echo "AMD_SHA256=$h2"
           echo "AMD_BYTES=$s2"
           echo 'DETERMINISTIC_BUILD=PASS'
@@ -112,4 +134,5 @@ jobs:
           ! grep -RIl '/root/digiera' "${roots[@]}"
           test -f public/mod/worksheetgrader/backup/moodle2/backup_worksheetgrader_activity_task.class.php
           test -f public/mod/worksheetgrader/backup/moodle2/restore_worksheetgrader_activity_task.class.php
+          git diff --check HEAD~1 HEAD
           echo 'SOURCE_SAFETY_GUARDS=PASS'

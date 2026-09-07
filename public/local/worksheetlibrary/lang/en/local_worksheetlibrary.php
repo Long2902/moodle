@@ -1,0 +1,20 @@
+<?php
+$string['pluginname']='Worksheet Library';
+$string['library']='Worksheet Library';
+$string['newfolder']='New folder';
+$string['newworksheet']='New worksheet';
+$string['search']='Search worksheets';
+$string['folders']='Folders';
+$string['details']='Details';
+$string['versions']='Versions';
+$string['usedin']='Used in';
+$string['publish']='Publish';
+$string['copy']='Copy';
+$string['move']='Move';
+$string['editoffice']='Edit in ONLYOFFICE';
+$string['privacy:metadata:wslib_folder'] = 'Worksheet-library folder author attribution.';
+$string['privacy:metadata:wslib_folder:createdby'] = 'The user who created the shared folder.';
+$string['privacy:metadata:wslib_item'] = 'Worksheet-library item author attribution.';
+$string['privacy:metadata:wslib_item:createdby'] = 'The user who created the shared worksheet item.';
+$string['privacy:metadata:wslib_version'] = 'Worksheet-library version author attribution.';
+$string['privacy:metadata:wslib_version:createdby'] = 'The user who created the worksheet version.';

@@ -1,0 +1,20 @@
+<?php
+$string['pluginname']='Kho phiếu học tập';
+$string['library']='Kho phiếu học tập';
+$string['newfolder']='Tạo thư mục';
+$string['newworksheet']='Tạo phiếu';
+$string['search']='Tìm kiếm phiếu';
+$string['folders']='Thư mục';
+$string['details']='Chi tiết';
+$string['versions']='Phiên bản';
+$string['usedin']='Được dùng trong';
+$string['publish']='Xuất bản';
+$string['copy']='Sao chép';
+$string['move']='Di chuyển';
+$string['editoffice']='Sửa bằng ONLYOFFICE';
+$string['privacy:metadata:wslib_folder'] = 'Thông tin tác giả của thư mục trong Kho phiếu.';
+$string['privacy:metadata:wslib_folder:createdby'] = 'Người dùng đã tạo thư mục dùng chung.';
+$string['privacy:metadata:wslib_item'] = 'Thông tin tác giả của phiếu trong Kho phiếu.';
+$string['privacy:metadata:wslib_item:createdby'] = 'Người dùng đã tạo phiếu dùng chung.';
+$string['privacy:metadata:wslib_version'] = 'Thông tin tác giả của phiên bản phiếu.';
+$string['privacy:metadata:wslib_version:createdby'] = 'Người dùng đã tạo phiên bản phiếu.';

@@ -1,0 +1,229 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<XMLDB PATH="mod/worksheetgrader/db" VERSION="2026090501" COMMENT="XMLDB file for mod_worksheetgrader">
+  <TABLES>
+    <TABLE NAME="worksheetgrader" COMMENT="Worksheet grader activity instances">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="course" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" DEFAULT="" />
+        <FIELD NAME="intro" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="introformat" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="contenthtml" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="grade" TYPE="number" LENGTH="10" DECIMALS="5" NOTNULL="true" DEFAULT="10" />
+        <FIELD NAME="aggregation" TYPE="char" LENGTH="12" NOTNULL="true" DEFAULT="average" />
+        <FIELD NAME="allowgroup" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" />
+        <FIELD NAME="allowadjust" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" />
+        <FIELD NAME="representative" TYPE="char" LENGTH="12" NOTNULL="true" DEFAULT="anymember" />
+        <FIELD NAME="completiononsubmit" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="completionongrade" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="course" TYPE="foreign" FIELDS="course" REFTABLE="course" REFFIELDS="id" />
+      </KEYS>
+    </TABLE>
+    <TABLE NAME="wsg_session" COMMENT="Dynamic teaching sessions within an activity">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="worksheetgraderid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" DEFAULT="" />
+        <FIELD NAME="sessiondate" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="status" TYPE="char" LENGTH="12" NOTNULL="true" DEFAULT="draft" />
+        <FIELD NAME="teammode" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="temporary" />
+        <FIELD NAME="contentmode" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="html" />
+        <FIELD NAME="groupingid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="maxpoints" TYPE="number" LENGTH="10" DECIMALS="5" NOTNULL="true" DEFAULT="10" />
+        <FIELD NAME="contenthtml" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="contentformat" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="1" />
+        <FIELD NAME="sourcefilename" TYPE="char" LENGTH="255" NOTNULL="true" DEFAULT="" />
+        <FIELD NAME="metadatajson" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="membershiplocked" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timeopen" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timeclose" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="libraryitemid" TYPE="int" NOTNULL="true" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="libraryversionid" TYPE="int" NOTNULL="true" LENGTH="10" DEFAULT="0" />
+        <FIELD NAME="worksheetkind" TYPE="char" NOTNULL="true" LENGTH="16" DEFAULT="html" />
+        <FIELD NAME="worksheethash" TYPE="char" NOTNULL="true" LENGTH="64" DEFAULT="" />
+        <FIELD NAME="migrationstatus" TYPE="char" NOTNULL="true" LENGTH="24" DEFAULT="not_required" />
+        <FIELD NAME="setupcomplete" TYPE="int" NOTNULL="true" LENGTH="1" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="activity" TYPE="foreign" FIELDS="worksheetgraderid" REFTABLE="worksheetgrader" REFFIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="activitystatus" UNIQUE="false" FIELDS="worksheetgraderid,status" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="wsg_team" COMMENT="Temporary team for one teaching session">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="sessionid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" DEFAULT="" />
+        <FIELD NAME="representativeuserid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="sourcegroupid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="locked" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="session" TYPE="foreign" FIELDS="sessionid" REFTABLE="wsg_session" REFFIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="sessionname" UNIQUE="true" FIELDS="sessionid,name" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="wsg_member" COMMENT="Snapshot-able temporary team membership">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="teamid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="role" TYPE="char" LENGTH="16" NOTNULL="true" DEFAULT="member" />
+        <FIELD NAME="status" TYPE="char" LENGTH="12" NOTNULL="true" DEFAULT="active" />
+        <FIELD NAME="addedby" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="team" TYPE="foreign" FIELDS="teamid" REFTABLE="wsg_team" REFFIELDS="id" />
+        <KEY NAME="user" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="teamuser" UNIQUE="true" FIELDS="teamid,userid" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="wsg_attempt" COMMENT="One shared attempt for a team in a session">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="sessionid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="teamid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="attemptnumber" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="1" />
+        <FIELD NAME="status" TYPE="char" LENGTH="16" NOTNULL="true" DEFAULT="inprogress" />
+        <FIELD NAME="submitteruserid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="answersjson" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="submissionhtml" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="membersnapshot" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="groupgrade" TYPE="number" LENGTH="10" DECIMALS="5" NOTNULL="false" />
+        <FIELD NAME="groupfeedback" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="gradedby" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timestarted" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timesubmitted" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timegraded" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="version" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="1" />
+        <FIELD NAME="officerevision" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="1" />
+        <FIELD NAME="officefilename" TYPE="char" LENGTH="255" NOTNULL="true" DEFAULT="" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="session" TYPE="foreign" FIELDS="sessionid" REFTABLE="wsg_session" REFFIELDS="id" />
+        <KEY NAME="team" TYPE="foreign" FIELDS="teamid" REFTABLE="wsg_team" REFFIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="teamattempt" UNIQUE="true" FIELDS="teamid,attemptnumber" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="wsg_grade" COMMENT="Published or draft grade for each member of a shared attempt">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="attemptid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="groupgrade" TYPE="number" LENGTH="10" DECIMALS="5" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="adjustment" TYPE="number" LENGTH="10" DECIMALS="5" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="finalgrade" TYPE="number" LENGTH="10" DECIMALS="5" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="feedback" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="published" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="publishedby" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="attempt" TYPE="foreign" FIELDS="attemptid" REFTABLE="wsg_attempt" REFFIELDS="id" />
+        <KEY NAME="user" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="attemptuser" UNIQUE="true" FIELDS="attemptid,userid" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="wsg_docspace" COMMENT="Dedicated DocSpace Public Room mappings for templates and attempts">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="worksheetgraderid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="sessionid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="teamid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="attemptid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="scope" TYPE="char" LENGTH="16" NOTNULL="true" DEFAULT="attempt" />
+        <FIELD NAME="roomid" TYPE="char" LENGTH="64" NOTNULL="true" DEFAULT="" />
+        <FIELD NAME="folderid" TYPE="char" LENGTH="64" NOTNULL="true" DEFAULT="" />
+        <FIELD NAME="fileid" TYPE="char" LENGTH="64" NOTNULL="true" DEFAULT="" />
+        <FIELD NAME="roomtitle" TYPE="char" LENGTH="255" NOTNULL="true" DEFAULT="" />
+        <FIELD NAME="filename" TYPE="char" LENGTH="255" NOTNULL="true" DEFAULT="" />
+        <FIELD NAME="publiclink" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="requesttoken" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="access" TYPE="char" LENGTH="16" NOTNULL="true" DEFAULT="edit" />
+        <FIELD NAME="status" TYPE="char" LENGTH="24" NOTNULL="true" DEFAULT="ready" />
+        <FIELD NAME="lastsync" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="activity" TYPE="foreign" FIELDS="worksheetgraderid" REFTABLE="worksheetgrader" REFFIELDS="id" />
+        <KEY NAME="session" TYPE="foreign" FIELDS="sessionid" REFTABLE="wsg_session" REFFIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="sessionscope" UNIQUE="false" FIELDS="sessionid,scope" />
+        <INDEX NAME="activitysessionteamscope" UNIQUE="true" FIELDS="worksheetgraderid,sessionid,teamid,scope" />
+        <INDEX NAME="attemptscope" UNIQUE="false" FIELDS="attemptid,scope" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="wsg_log" COMMENT="Activity audit trail">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="worksheetgraderid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="sessionid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="teamid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="attemptid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="actorid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="action" TYPE="char" LENGTH="50" NOTNULL="true" DEFAULT="" />
+        <FIELD NAME="detailsjson" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="activitytime" UNIQUE="false" FIELDS="worksheetgraderid,timecreated" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="wsg_office_save" COMMENT="ONLYOFFICE force-save request state">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="attemptid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="requestid" TYPE="char" LENGTH="64" NOTNULL="true" DEFAULT="" />
+        <FIELD NAME="intent" TYPE="char" LENGTH="16" NOTNULL="true" DEFAULT="progress" />
+        <FIELD NAME="status" TYPE="char" LENGTH="16" NOTNULL="true" DEFAULT="pending" />
+        <FIELD NAME="documentkey" TYPE="char" LENGTH="128" NOTNULL="true" DEFAULT="" />
+        <FIELD NAME="revision" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="1" />
+        <FIELD NAME="createdby" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="errorcode" TYPE="char" LENGTH="64" NOTNULL="true" DEFAULT="" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="attempt" TYPE="foreign" FIELDS="attemptid" REFTABLE="wsg_attempt" REFFIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="requestid" UNIQUE="true" FIELDS="requestid" />
+        <INDEX NAME="attemptstatus" UNIQUE="false" FIELDS="attemptid,status" />
+      </INDEXES>
+    </TABLE>
+  </TABLES>
+</XMLDB>

@@ -1,0 +1,138 @@
+
+/* DIGIERA_NATIVE_RIBBON_START */
+
+.dgn-editor {
+    width: 100%;
+}
+
+.dgn-editor .dgn-ribbon {
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 0.5rem 0.5rem 0 0;
+    background: var(--bs-body-bg, #fff);
+    overflow: hidden;
+}
+
+.dgn-editor .dgn-ribbon-tabs {
+    display: flex;
+    align-items: center;
+    gap: 0.125rem;
+    padding: 0.25rem 0.5rem 0;
+    border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+}
+
+.dgn-editor .dgn-ribbon-tab,
+.dgn-editor .dgn-ribbon-control {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+}
+
+.dgn-editor .dgn-ribbon-tab {
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem 0.375rem 0 0;
+}
+
+.dgn-editor .dgn-ribbon-tab[aria-selected="true"] {
+    font-weight: 600;
+    background: var(--bs-tertiary-bg, #f8f9fa);
+}
+
+.dgn-editor .dgn-ribbon-panel {
+    display: flex;
+    align-items: stretch;
+    gap: 0.25rem;
+    min-height: 5rem;
+    padding: 0.5rem;
+}
+
+.dgn-editor .dgn-ribbon-panel[hidden] {
+    display: none;
+}
+
+.dgn-editor .dgn-ribbon-group {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-width: 4rem;
+    padding: 0 0.5rem;
+    border-right: 1px solid var(--bs-border-color, #dee2e6);
+}
+
+.dgn-editor .dgn-ribbon-group__controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.dgn-editor .dgn-ribbon-group__label {
+    margin-top: 0.375rem;
+    font-size: 0.75rem;
+    text-align: center;
+    opacity: 0.7;
+}
+
+.dgn-editor .dgn-ribbon-control {
+    min-width: 2rem;
+    min-height: 2rem;
+    padding: 0.375rem 0.5rem;
+    border: 1px solid transparent;
+    border-radius: 0.375rem;
+}
+
+.dgn-editor .dgn-ribbon-control:hover,
+.dgn-editor .dgn-ribbon-control:focus-visible {
+    border-color: var(--bs-border-color, #dee2e6);
+    background: var(--bs-tertiary-bg, #f8f9fa);
+}
+
+.dgn-editor .dgn-ribbon-control:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+.dgn-editor .dgn-canvas {
+    min-height: 42rem;
+    padding: 3rem;
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-top: 0;
+    outline: none;
+    background: var(--bs-body-bg, #fff);
+}
+
+.dgn-editor .dgn-canvas [data-align="left"] {
+    text-align: left;
+}
+
+.dgn-editor .dgn-canvas [data-align="center"] {
+    text-align: center;
+}
+
+.dgn-editor .dgn-canvas [data-align="right"] {
+    text-align: right;
+}
+
+.dgn-editor .dgn-canvas [data-align="justify"] {
+    text-align: justify;
+}
+
+.dgn-editor .dgn-answer {
+    min-height: 3rem;
+    margin: 0.5rem 0;
+    padding: 0.75rem;
+    border: 1px dashed var(--bs-border-color, #dee2e6);
+    border-radius: 0.375rem;
+}
+
+.dgn-editor .dgn-image,
+.dgn-editor .dgn-math-block,
+.dgn-editor .dgn-answer-table {
+    margin: 0.75rem 0;
+    padding: 0.75rem;
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 0.375rem;
+}
+
+/* DIGIERA_NATIVE_RIBBON_END */

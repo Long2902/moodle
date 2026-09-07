@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="local/worksheetlibrary/db" VERSION="2026090701" COMMENT="XMLDB for local_worksheetlibrary">
+ <TABLES>
+  <TABLE NAME="wslib_folder" COMMENT="Global worksheet folders">
+   <FIELDS>
+    <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+    <FIELD NAME="parentid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+    <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" DEFAULT=""/>
+    <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+    <FIELD NAME="archived" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0"/>
+    <FIELD NAME="createdby" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+    <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+    <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+   </FIELDS>
+   <KEYS><KEY NAME="primary" TYPE="primary" FIELDS="id"/></KEYS>
+   <INDEXES><INDEX NAME="parentarchived" UNIQUE="false" FIELDS="parentid,archived"/></INDEXES>
+  </TABLE>
+  <TABLE NAME="wslib_item" COMMENT="Worksheet items">
+   <FIELDS>
+    <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+    <FIELD NAME="folderid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+    <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" DEFAULT=""/>
+    <FIELD NAME="kind" TYPE="char" LENGTH="16" NOTNULL="true" DEFAULT="html"/>
+    <FIELD NAME="currentversionid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+    <FIELD NAME="archived" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0"/>
+    <FIELD NAME="createdby" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+    <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+    <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+   </FIELDS>
+   <KEYS><KEY NAME="primary" TYPE="primary" FIELDS="id"/></KEYS>
+   <INDEXES><INDEX NAME="folderkind" UNIQUE="false" FIELDS="folderid,kind"/></INDEXES>
+  </TABLE>
+  <TABLE NAME="wslib_version" COMMENT="Immutable worksheet versions and editable drafts">
+   <FIELDS>
+    <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+    <FIELD NAME="itemid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+    <FIELD NAME="versionno" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="1"/>
+    <FIELD NAME="state" TYPE="char" LENGTH="12" NOTNULL="true" DEFAULT="draft"/>
+    <FIELD NAME="contenthtml" TYPE="text" NOTNULL="false"/>
+    <FIELD NAME="nativejson" TYPE="text" NOTNULL="false"/>
+    <FIELD NAME="schemaversion" TYPE="int" LENGTH="10" NOTNULL="false"/>
+    <FIELD NAME="revision" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+    <FIELD NAME="renderedhtml" TYPE="text" NOTNULL="false"/>
+    <FIELD NAME="filename" TYPE="char" LENGTH="255" NOTNULL="true" DEFAULT=""/>
+    <FIELD NAME="mimetype" TYPE="char" LENGTH="100" NOTNULL="true" DEFAULT=""/>
+    <FIELD NAME="contenthash" TYPE="char" LENGTH="64" NOTNULL="true" DEFAULT=""/>
+    <FIELD NAME="createdby" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+    <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+    <FIELD NAME="timepublished" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+   </FIELDS>
+   <KEYS><KEY NAME="primary" TYPE="primary" FIELDS="id"/><KEY NAME="item" TYPE="foreign" FIELDS="itemid" REFTABLE="wslib_item" REFFIELDS="id"/></KEYS>
+   <INDEXES><INDEX NAME="itemversion" UNIQUE="true" FIELDS="itemid,versionno"/><INDEX NAME="itemstate" UNIQUE="false" FIELDS="itemid,state"/></INDEXES>
+  </TABLE>
+  <TABLE NAME="wslib_binding" COMMENT="Virtual course and section placements">
+   <FIELDS>
+    <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+    <FIELD NAME="itemid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+    <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true"/>
+    <FIELD NAME="sectionid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+    <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+    <FIELD NAME="visible" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1"/>
+    <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0"/>
+   </FIELDS>
+   <KEYS><KEY NAME="primary" TYPE="primary" FIELDS="id"/><KEY NAME="item" TYPE="foreign" FIELDS="itemid" REFTABLE="wslib_item" REFFIELDS="id"/><KEY NAME="course" TYPE="foreign" FIELDS="courseid" REFTABLE="course" REFFIELDS="id"/></KEYS>
+   <INDEXES><INDEX NAME="itemplace" UNIQUE="true" FIELDS="itemid,courseid,sectionid"/><INDEX NAME="courseplace" UNIQUE="false" FIELDS="courseid,sectionid,visible"/></INDEXES>
+  </TABLE>
+ </TABLES>
+</XMLDB>
