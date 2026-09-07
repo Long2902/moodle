@@ -1,0 +1,109 @@
+name: DIGIERA Media RC1 fast-track
+
+on:
+  push:
+    branches:
+      - feature/digiera-media-v1-rc1-fasttrack
+    paths:
+      - 'public/local/digieramedia/**'
+      - 'public/filter/digieramedia/**'
+      - 'public/lib/editor/tiny/plugins/digieramedia/**'
+      - '.digiera/tests/digiera-media-rc1-contract.py'
+      - '.digiera/rc1/**'
+      - '.github/workflows/digiera-media-rc1.yml'
+  workflow_dispatch:
+
+jobs:
+  verify-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: MySQL 8.4
+        uses: moodlehq/mysql-action@v1
+        with:
+          collation server: utf8mb4_bin
+          mysql version: 8.4
+          mysql database: test
+          mysql user: test
+          mysql password: test
+          use tmpfs: true
+          tmpfs size: '1024M'
+          extra conf: --skip-log-bin
+      - name: PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.3
+          ini-values: max_input_vars=5000
+          coverage: none
+      - name: Checkout RC1 branch
+        uses: actions/checkout@v4
+      - name: RC1 source contract and syntax gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pytest -q .digiera/tests/digiera-media-rc1-contract.py
+          find public/local/digieramedia public/filter/digieramedia public/lib/editor/tiny/plugins/digieramedia -type f -name '*.php' -print0 | sort -z | xargs -0 -r -n1 php -l
+          find public/lib/editor/tiny/plugins/digieramedia/amd/src -type f -name '*.js' -print0 | sort -z | xargs -0 -r -n1 node --check
+      - name: Build TinyMCE AMD
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts
+          npx grunt amd --root=public/lib/editor/tiny/plugins/digieramedia
+          test -f public/lib/editor/tiny/plugins/digieramedia/amd/build/plugin.min.js
+          test -f public/lib/editor/tiny/plugins/digieramedia/amd/build/modal.min.js
+          test -f public/lib/editor/tiny/plugins/digieramedia/amd/build/reference_component.min.js
+      - name: Set up Moodle PHPUnit
+        env:
+          dbtype: mysqli
+        run: |
+          echo "pathtophp=$(which php)" >> "$GITHUB_ENV"
+          cp .github/workflows/config-template.php config.php
+          mkdir -p ../moodledata
+          sudo locale-gen en_AU.UTF-8
+          php public/admin/tool/phpunit/cli/init.php --no-composer-self-update
+      - name: Run DIGIERA Media runtime suite
+        env:
+          dbtype: mysqli
+        shell: bash
+        run: |
+          set -euo pipefail
+          tests=(
+            public/local/digieramedia/tests/schema_test.php
+            public/local/digieramedia/tests/backup_manifest_test.php
+            public/local/digieramedia/tests/reference_remapper_test.php
+            public/local/digieramedia/tests/independent_copy_test.php
+            public/local/digieramedia/tests/course_restore_integration_test.php
+            public/filter/digieramedia/tests/text_filter_test.php
+          )
+          for testfile in "${tests[@]}"; do
+            test -f "$testfile"
+            echo "===== $testfile ====="
+            vendor/bin/phpunit "$testfile"
+          done
+      - name: Build reproducible RC1 bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .digiera/dist/rc1
+          rm -f .digiera/dist/rc1/*
+          tar --sort=name --mtime='UTC 2026-09-07' --owner=0 --group=0 --numeric-owner -czf .digiera/dist/rc1/DIGIERA_MEDIA_MOODLE51_RC1_FASTTRACK.tgz -C public local/digieramedia filter/digieramedia lib/editor/tiny/plugins/digieramedia
+          sha256sum .digiera/dist/rc1/DIGIERA_MEDIA_MOODLE51_RC1_FASTTRACK.tgz > .digiera/dist/rc1/DIGIERA_MEDIA_MOODLE51_RC1_FASTTRACK.sha256
+          cp .digiera/rc1/INSTALL_AND_SMOKE.md .digiera/dist/rc1/
+      - name: Verify release archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive=.digiera/dist/rc1/DIGIERA_MEDIA_MOODLE51_RC1_FASTTRACK.tgz
+          tar -tzf "$archive" | grep -q '^local/digieramedia/version.php$'
+          tar -tzf "$archive" | grep -q '^filter/digieramedia/version.php$'
+          tar -tzf "$archive" | grep -q '^lib/editor/tiny/plugins/digieramedia/version.php$'
+          tar -tzf "$archive" | grep -q '^lib/editor/tiny/plugins/digieramedia/amd/build/plugin.min.js$'
+          (cd .digiera/dist/rc1 && sha256sum -c DIGIERA_MEDIA_MOODLE51_RC1_FASTTRACK.sha256)
+      - name: Upload RC1 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DIGIERA_MEDIA_MOODLE51_RC1_FASTTRACK
+          path: .digiera/dist/rc1/*
+          if-no-files-found: error
+          retention-days: 14
