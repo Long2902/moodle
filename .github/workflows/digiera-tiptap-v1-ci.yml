@@ -1,0 +1,85 @@
+name: DIGIERA Tiptap V1 CI
+
+on:
+  push:
+    branches:
+      - digiera/tiptap-v1-ci
+    paths:
+      - public/local/digieranative/**
+      - public/local/worksheetlibrary/**
+      - public/mod/worksheetgrader/**
+      - .github/workflows/digiera-tiptap-v1-ci.yml
+
+permissions:
+  contents: read
+
+jobs:
+  tiptap-v1:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: public/local/digieranative/client/package-lock.json
+
+      - name: Regenerate Tiptap lock
+        working-directory: public/local/digieranative/client
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Clean install
+        working-directory: public/local/digieranative/client
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Native tests
+        working-directory: public/local/digieranative/client
+        run: npm test
+
+      - name: Standalone and static contracts
+        run: |
+          node public/local/digieranative/client/tests/tiptap-adapter-standalone.mjs
+          python3 public/local/digieranative/tests/tiptap_hybrid_static_contract.py
+          python3 public/local/digieranative/tests/ui_v1_editor_visual_contract.py
+          python3 public/local/worksheetlibrary/tests/ui_v1_visual_contract.py
+
+      - name: JS syntax
+        run: |
+          node --check public/local/digieranative/client/src/editor.js
+          node --check public/local/digieranative/client/src/ribbon.js
+          node --check public/local/digieranative/client/src/tiptap_adapter.js
+          node --check public/local/digieranative/client/src/tiptap_extensions.js
+          node --check public/local/worksheetlibrary/amd/src/native_editor.js
+          node --check public/mod/worksheetgrader/amd/src/native_attempt.js
+
+      - name: Deterministic Rollup build
+        working-directory: public/local/digieranative/client
+        run: |
+          npm run build
+          sha256sum ../amd/build/native_editor.min.js | tee /tmp/build1.sha
+          cp ../amd/build/native_editor.min.js /tmp/native_editor.min.js.first
+          npm run build
+          sha256sum ../amd/build/native_editor.min.js | tee /tmp/build2.sha
+          cmp /tmp/native_editor.min.js.first ../amd/build/native_editor.min.js
+          echo DETERMINISTIC_TIPTAP_BUILD=PASS
+
+      - name: Package CI outputs
+        run: |
+          mkdir -p /tmp/tiptap-ci-output/public/local/digieranative/client
+          mkdir -p /tmp/tiptap-ci-output/public/local/digieranative/amd/build
+          cp public/local/digieranative/client/package-lock.json /tmp/tiptap-ci-output/public/local/digieranative/client/package-lock.json
+          cp public/local/digieranative/amd/build/native_editor.min.js /tmp/tiptap-ci-output/public/local/digieranative/amd/build/native_editor.min.js
+          sha256sum /tmp/tiptap-ci-output/public/local/digieranative/client/package-lock.json
+          sha256sum /tmp/tiptap-ci-output/public/local/digieranative/amd/build/native_editor.min.js
+
+      - name: Upload Tiptap CI output
+        uses: actions/upload-artifact@v4
+        with:
+          name: digiera-tiptap-v1-ci-output
+          path: /tmp/tiptap-ci-output
+          if-no-files-found: error
