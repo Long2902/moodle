@@ -6,7 +6,7 @@ import * as Configuration from './configuration';
 import * as Options from './options';
 import * as ReferenceComponent from './reference_component';
 
-export default new Promise(async(resolve) => {
+export default (async() => {
     const [tinyMCE, setupCommands, pluginMetadata] = await Promise.all([
         getTinyMCE(),
         Commands.getSetup(),
@@ -20,5 +20,5 @@ export default new Promise(async(resolve) => {
         return pluginMetadata;
     });
 
-    resolve([`${component}/plugin`, Configuration]);
-});
+    return [`${component}/plugin`, Configuration];
+})();
