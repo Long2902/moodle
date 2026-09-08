@@ -22,6 +22,8 @@ REQUIRED = [
     'public/lib/editor/tiny/plugins/digieramedia/amd/src/ui.js',
     'public/lib/editor/tiny/plugins/digieramedia/amd/src/upload_client.js',
     'public/lib/editor/tiny/plugins/digieramedia/amd/src/reference_component.js',
+    'public/lib/editor/tiny/plugins/digieramedia/amd/build/ui.min.js',
+    'public/lib/editor/tiny/plugins/digieramedia/amd/build/upload_client.min.js',
     'public/lib/editor/tiny/plugins/digieramedia/templates/modal.mustache',
     'public/lib/editor/tiny/plugins/digieramedia/styles.css',
     'public/filter/digieramedia/classes/text_filter.php',
@@ -121,6 +123,17 @@ def test_live_r2_single_put_contract():
     joined = '\n'.join([r2config, r2client, session, finalize, uploadjs])
     assert 'SECRET_ACCESS_KEY=' not in joined
     assert 'Authorization: Bearer' not in joined
+
+def test_live_r2_runtime_build_is_committed_and_wired():
+    ui = read('public/lib/editor/tiny/plugins/digieramedia/amd/build/ui.min.js')
+    upload = read('public/lib/editor/tiny/plugins/digieramedia/amd/build/upload_client.min.js')
+    assert 'tiny_digieramedia/ui' in ui
+    assert './upload_client' in ui
+    assert 'UploadClient.uploadFile' in ui
+    assert 'tiny_digieramedia/upload_client' in upload
+    assert 'local_digieramedia_create_upload_session' in upload
+    assert 'local_digieramedia_finalize_upload' in upload
+    assert 'XMLHttpRequest' in upload
 
 def test_external_services_are_registered():
     services = read('public/local/digieramedia/db/services.php')
