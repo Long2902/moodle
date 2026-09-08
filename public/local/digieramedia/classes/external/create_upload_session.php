@@ -17,23 +17,34 @@ final class create_upload_session extends external_api {
             'filename' => new external_value(PARAM_RAW_TRIMMED, 'Original file name'),
             'mimetype' => new external_value(PARAM_RAW_TRIMMED, 'Browser MIME type', VALUE_DEFAULT, 'application/octet-stream'),
             'filesize' => new external_value(PARAM_INT, 'File size in bytes'),
+            'replacemediauuid' => new external_value(PARAM_ALPHANUMEXT, 'Logical media UUID to replace', VALUE_DEFAULT, ''),
         ]);
     }
 
-    public static function execute(int $contextid, string $filename, string $mimetype, int $filesize): array {
+    public static function execute(
+        int $contextid,
+        string $filename,
+        string $mimetype,
+        int $filesize,
+        string $replacemediauuid = ''
+    ): array {
         global $USER;
-        $params = self::validate_parameters(self::execute_parameters(), compact('contextid', 'filename', 'mimetype', 'filesize'));
+
+        $params = self::validate_parameters(
+            self::execute_parameters(),
+            compact('contextid', 'filename', 'mimetype', 'filesize', 'replacemediauuid')
+        );
         $context = context::instance_by_id($params['contextid'], MUST_EXIST);
         self::validate_context($context);
         require_capability('local/digieramedia:upload', $context);
 
-        $service = new upload_session_service();
-        return $service->create(
+        return (new upload_session_service())->create(
             (int)$USER->id,
             $context,
             $params['filename'],
             $params['mimetype'],
-            (int)$params['filesize']
+            (int)$params['filesize'],
+            $params['replacemediauuid']
         );
     }
 

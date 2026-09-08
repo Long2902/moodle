@@ -1,12 +1,13 @@
 import Ajax from 'core/ajax';
 
-const createUploadSession = async(config, file) => Ajax.call([{
+const createUploadSession = async(config, file, replacemediauuid = '') => Ajax.call([{
     methodname: 'local_digieramedia_create_upload_session',
     args: {
         contextid: config.contextid,
         filename: file.name,
         mimetype: file.type || 'application/octet-stream',
         filesize: file.size,
+        replacemediauuid,
     },
 }])[0];
 
@@ -36,8 +37,8 @@ const putFile = (file, session, onProgress) => new Promise((resolve, reject) => 
     request.send(file);
 });
 
-export const uploadFile = async(config, file, onProgress = null) => {
-    const session = await createUploadSession(config, file);
+export const uploadFile = async(config, file, onProgress = null, replacemediauuid = '') => {
+    const session = await createUploadSession(config, file, replacemediauuid);
     if (session.uploadtype !== 'single') {
         throw new Error('Máy chủ yêu cầu multipart nhưng RC hiện tại chưa bật multipart.');
     }

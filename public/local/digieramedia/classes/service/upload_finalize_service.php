@@ -27,10 +27,20 @@ final class upload_finalize_service {
             throw new \moodle_exception('locktimeout', 'local_digieramedia');
         }
 
+        $medialock = null;
         try {
             $upload = $DB->get_record('local_digieramedia_upload', ['sessionuuid' => $sessionuuid], '*', MUST_EXIST);
             if ((int)$upload->userid !== $userid || (int)$upload->contextid !== (int)$context->id) {
                 throw new \required_capability_exception($context, 'local/digieramedia:upload', 'nopermissions', '');
+            }
+
+            $targetmediaid = (int)($upload->targetmediaid ?? 0);
+            if ($targetmediaid > 0) {
+                require_capability('local/digieramedia:replace', $context, $userid);
+                $medialock = $factory->get_lock('media-version-' . $targetmediaid, 10);
+                if (!$medialock) {
+                    throw new \moodle_exception('locktimeout', 'local_digieramedia');
+                }
             }
 
             if ((int)$upload->committedmediaid > 0) {
@@ -68,63 +78,134 @@ final class upload_finalize_service {
                 return $this->media_result((int)$fresh->committedmediaid);
             }
 
-            $now = time();
-            $mediauuid = self::uuidv4();
-            $visibility = (int)$upload->courseid > 0 ? 'COURSE' : 'PRIVATE';
-            $mediaid = (int)$DB->insert_record('local_digieramedia_media', (object)[
-                'uuid' => $mediauuid,
-                'name' => $file['filename'],
-                'description' => null,
-                'mediatype' => $file['mediatype'],
-                'mimetype' => $file['mimetype'],
-                'owneruserid' => $userid,
-                'origincontextid' => (int)$context->id,
-                'origincourseid' => (int)$upload->courseid,
-                'originsectionid' => (int)$upload->sectionid,
-                'visibility' => $visibility,
-                'status' => 'ACTIVE',
-                'currentversionid' => 0,
-                'timecreated' => $now,
-                'timemodified' => $now,
-                'createdby' => $userid,
-                'modifiedby' => $userid,
-            ]);
+            if ((int)($fresh->targetmediaid ?? 0) > 0) {
+                $mediaid = $this->commit_replacement($userid, $context, $fresh, $file, $head);
+            } else {
+                $mediaid = $this->commit_new_media($userid, $context, $fresh, $file, $head);
+            }
 
-            $versionid = (int)$DB->insert_record('local_digieramedia_version', (object)[
-                'mediaid' => $mediaid,
-                'versionno' => 1,
-                'bucket' => (string)$upload->targetbucket,
-                'objectkey' => (string)$upload->targetkey,
-                'originalfilename' => $file['filename'],
-                'displayfilename' => $file['filename'],
-                'filesize' => (int)$upload->expectedsize,
-                'mimetype' => $file['mimetype'],
-                'etag' => (string)$head['etag'],
-                'checksum_sha256' => null,
-                'width' => null,
-                'height' => null,
-                'duration' => null,
-                'status' => 'READY',
-                'timecreated' => $now,
-                'createdby' => $userid,
-                'restoredfromversionid' => 0,
-                'timepurged' => 0,
-            ]);
-
-            $DB->set_field('local_digieramedia_media', 'currentversionid', $versionid, ['id' => $mediaid]);
-            $DB->update_record('local_digieramedia_upload', (object)[
-                'id' => (int)$upload->id,
-                'status' => 'READY',
-                'bytesuploaded' => (int)$upload->expectedsize,
-                'timemodified' => $now,
-                'committedmediaid' => $mediaid,
-            ]);
             $transaction->allow_commit();
-
             return $this->media_result($mediaid);
         } finally {
+            if ($medialock) {
+                $medialock->release();
+            }
             $lock->release();
         }
+    }
+
+    private function commit_replacement(int $userid, context $context, \stdClass $upload, array $file, array $head): int {
+        global $DB;
+
+        require_capability('local/digieramedia:replace', $context, $userid);
+        $media = $DB->get_record(
+            'local_digieramedia_media',
+            ['id' => (int)$upload->targetmediaid, 'status' => 'ACTIVE'],
+            '*',
+            MUST_EXIST
+        );
+        if ((string)$media->mediatype !== (string)$file['mediatype']) {
+            throw new \invalid_parameter_exception('Replacement file must keep the same media type.');
+        }
+
+        $maxversion = (int)$DB->get_field_sql(
+            'SELECT MAX(versionno) FROM {local_digieramedia_version} WHERE mediaid = :mediaid',
+            ['mediaid' => (int)$media->id]
+        );
+        $versionno = max(1, $maxversion + 1);
+        $now = time();
+        $versionid = (int)$DB->insert_record('local_digieramedia_version', (object)[
+            'mediaid' => (int)$media->id,
+            'versionno' => $versionno,
+            'bucket' => (string)$upload->targetbucket,
+            'objectkey' => (string)$upload->targetkey,
+            'originalfilename' => $file['filename'],
+            'displayfilename' => $file['filename'],
+            'filesize' => (int)$upload->expectedsize,
+            'mimetype' => $file['mimetype'],
+            'etag' => (string)$head['etag'],
+            'checksum_sha256' => null,
+            'width' => null,
+            'height' => null,
+            'duration' => null,
+            'status' => 'READY',
+            'timecreated' => $now,
+            'createdby' => $userid,
+            'restoredfromversionid' => 0,
+            'timepurged' => 0,
+        ]);
+
+        $DB->update_record('local_digieramedia_media', (object)[
+            'id' => (int)$media->id,
+            'mimetype' => $file['mimetype'],
+            'currentversionid' => $versionid,
+            'timemodified' => $now,
+            'modifiedby' => $userid,
+        ]);
+        $this->mark_upload_ready($upload, (int)$media->id, $now);
+        return (int)$media->id;
+    }
+
+    private function commit_new_media(int $userid, context $context, \stdClass $upload, array $file, array $head): int {
+        global $DB;
+
+        $now = time();
+        $mediauuid = self::uuidv4();
+        $visibility = (int)$upload->courseid > 0 ? 'COURSE' : 'PRIVATE';
+        $mediaid = (int)$DB->insert_record('local_digieramedia_media', (object)[
+            'uuid' => $mediauuid,
+            'name' => $file['filename'],
+            'description' => null,
+            'mediatype' => $file['mediatype'],
+            'mimetype' => $file['mimetype'],
+            'owneruserid' => $userid,
+            'origincontextid' => (int)$context->id,
+            'origincourseid' => (int)$upload->courseid,
+            'originsectionid' => (int)$upload->sectionid,
+            'visibility' => $visibility,
+            'status' => 'ACTIVE',
+            'currentversionid' => 0,
+            'timecreated' => $now,
+            'timemodified' => $now,
+            'createdby' => $userid,
+            'modifiedby' => $userid,
+        ]);
+
+        $versionid = (int)$DB->insert_record('local_digieramedia_version', (object)[
+            'mediaid' => $mediaid,
+            'versionno' => 1,
+            'bucket' => (string)$upload->targetbucket,
+            'objectkey' => (string)$upload->targetkey,
+            'originalfilename' => $file['filename'],
+            'displayfilename' => $file['filename'],
+            'filesize' => (int)$upload->expectedsize,
+            'mimetype' => $file['mimetype'],
+            'etag' => (string)$head['etag'],
+            'checksum_sha256' => null,
+            'width' => null,
+            'height' => null,
+            'duration' => null,
+            'status' => 'READY',
+            'timecreated' => $now,
+            'createdby' => $userid,
+            'restoredfromversionid' => 0,
+            'timepurged' => 0,
+        ]);
+
+        $DB->set_field('local_digieramedia_media', 'currentversionid', $versionid, ['id' => $mediaid]);
+        $this->mark_upload_ready($upload, $mediaid, $now);
+        return $mediaid;
+    }
+
+    private function mark_upload_ready(\stdClass $upload, int $mediaid, int $now): void {
+        global $DB;
+        $DB->update_record('local_digieramedia_upload', (object)[
+            'id' => (int)$upload->id,
+            'status' => 'READY',
+            'bytesuploaded' => (int)$upload->expectedsize,
+            'timemodified' => $now,
+            'committedmediaid' => $mediaid,
+        ]);
     }
 
     private function media_result(int $mediaid): array {

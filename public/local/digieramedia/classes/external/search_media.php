@@ -51,7 +51,6 @@ final class search_media extends external_api {
         $sqlparams['mediastatus'] = $tab === 'trash' ? 'TRASHED' : 'ACTIVE';
 
         if (!$canviewall) {
-            // SHARED is the canonical cross-context library visibility used by seeded and reusable media.
             $scope = [
                 'm.owneruserid = :owneruserid',
                 "m.visibility = 'GLOBAL'",
@@ -78,8 +77,12 @@ final class search_media extends external_api {
         $select = "SELECT m.id, m.uuid, m.name, m.mediatype, m.mimetype, m.visibility, m.status,
                           m.owneruserid, m.timemodified, v.filesize, v.displayfilename, v.status AS versionstatus";
         $order = ' ORDER BY m.timemodified DESC, m.id DESC';
-        $records = $DB->get_records_sql($select . $fromsql . ' WHERE ' . $wheresql . $order,
-            $sqlparams, $page * $pagesize, $pagesize);
+        $records = $DB->get_records_sql(
+            $select . $fromsql . ' WHERE ' . $wheresql . $order,
+            $sqlparams,
+            $page * $pagesize,
+            $pagesize
+        );
 
         $items = [];
         foreach ($records as $record) {
@@ -102,6 +105,8 @@ final class search_media extends external_api {
             'pagesize' => $pagesize,
             'total' => $total,
             'canupload' => has_capability('local/digieramedia:upload', $context),
+            'canreplace' => has_capability('local/digieramedia:replace', $context),
+            'canmanageversions' => has_capability('local/digieramedia:manageversions', $context),
         ];
     }
 
@@ -122,6 +127,8 @@ final class search_media extends external_api {
             'pagesize' => new external_value(PARAM_INT, 'Page size'),
             'total' => new external_value(PARAM_INT, 'Total results'),
             'canupload' => new external_value(PARAM_BOOL, 'Upload capability'),
+            'canreplace' => new external_value(PARAM_BOOL, 'Replace capability'),
+            'canmanageversions' => new external_value(PARAM_BOOL, 'Version-management capability'),
         ]);
     }
 }

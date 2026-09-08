@@ -19,7 +19,14 @@ final class upload_session_service {
         $this->policy = $policy ?? new file_policy($this->config);
     }
 
-    public function create(int $userid, context $context, string $filename, string $mimetype, int $filesize): array {
+    public function create(
+        int $userid,
+        context $context,
+        string $filename,
+        string $mimetype,
+        int $filesize,
+        string $replacemediauuid = ''
+    ): array {
         global $DB;
 
         require_capability('local/digieramedia:upload', $context, $userid);
@@ -39,9 +46,26 @@ final class upload_session_service {
             $courseid = 0;
         }
 
+        $targetmediaid = 0;
+        $storagecourseid = $courseid;
+        if ($replacemediauuid !== '') {
+            require_capability('local/digieramedia:replace', $context, $userid);
+            $media = $DB->get_record(
+                'local_digieramedia_media',
+                ['uuid' => $replacemediauuid, 'status' => 'ACTIVE'],
+                '*',
+                MUST_EXIST
+            );
+            if ((string)$media->mediatype !== (string)$file['mediatype']) {
+                throw new \invalid_parameter_exception('Replacement file must keep the same media type.');
+            }
+            $targetmediaid = (int)$media->id;
+            $storagecourseid = (int)$media->origincourseid;
+        }
+
         $sessionuuid = self::uuidv4();
         $objectuuid = self::uuidv4();
-        $namespace = $courseid > 0 ? 'courses/' . $courseid . '/general' : 'shared';
+        $namespace = $storagecourseid > 0 ? 'courses/' . $storagecourseid . '/general' : 'shared';
         $targetkey = 'digiera/' . $namespace . '/' . $file['mediatype'] . '/' . $objectuuid . '.' . $file['extension'];
         $now = time();
         $expiresat = $now + $this->config->presign_ttl();
@@ -55,6 +79,7 @@ final class upload_session_service {
             'originalfilename' => $file['filename'],
             'expectedsize' => $file['filesize'],
             'expectedmimetype' => $file['mimetype'],
+            'targetmediaid' => $targetmediaid,
             'targetbucket' => $this->config->bucket(),
             'targetkey' => $targetkey,
             'uploadtype' => 'SINGLE',

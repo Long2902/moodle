@@ -10,9 +10,25 @@ const search = async(config, tab, query = '') => Ajax.call([{
     args: {contextid: config.contextid, tab, query, page: 0, pagesize: 24},
 }])[0];
 
-const createReference = async(config, mediauuid) => Ajax.call([{
+const getMediaVersions = async(config, mediauuid) => Ajax.call([{
+    methodname: 'local_digieramedia_get_media_versions',
+    args: {contextid: config.contextid, mediauuid},
+}])[0];
+
+const createReference = async(
+    config,
+    mediauuid,
+    versionmode = 'FOLLOW_CURRENT',
+    pinnedversionid = 0
+) => Ajax.call([{
     methodname: 'local_digieramedia_create_reference',
-    args: {contextid: config.contextid, mediauuid, displayprofile: 'embedded'},
+    args: {
+        contextid: config.contextid,
+        mediauuid,
+        displayprofile: 'embedded',
+        versionmode,
+        pinnedversionid,
+    },
 }])[0];
 
 const formatBytes = (bytes) => {
@@ -120,8 +136,8 @@ const updatePreview = (root, selected) => {
     if (!selected) {
         preview.innerHTML = '<div class="tiny-digieramedia__empty">Chọn một học liệu để xem thông tin.</div>' +
             '<details class="tiny-digieramedia__advanced"><summary>Tùy chọn nâng cao (Admin/KTV)</summary>' +
-            '<div class="tiny-digieramedia__advancedbody">' +
-            'Các thao tác quản trị nâng cao sẽ xuất hiện khi quyền và API tương ứng khả dụng.</div></details>';
+            '<div class="tiny-digieramedia__advancedbody">Chọn học liệu để xem phiên bản và thao tác quản trị.</div>' +
+            '</details>';
         if (save) {
             save.disabled = true;
         }
@@ -139,10 +155,12 @@ const updatePreview = (root, selected) => {
         <dt>Cập nhật</dt><dd>${formatDate(selected.modified)}</dd>
         <dt>Phạm vi</dt><dd>${escapeHtml(selected.visibility || '—')}</dd>
         <dt>Trạng thái</dt><dd>Sẵn sàng</dd></dl>
-        <details class="tiny-digieramedia__advanced"><summary>Tùy chọn nâng cao (Admin/KTV)</summary>
-        <div class="tiny-digieramedia__advancedbody">
-            Phiên bản, vị trí sử dụng, thay thế và quản trị vòng đời sẽ được nối vào panel này theo API quản trị.
-        </div></details>`;
+        <details class="tiny-digieramedia__advanced" open>
+            <summary>Tùy chọn nâng cao (Admin/KTV)</summary>
+            <div class="tiny-digieramedia__advancedbody" data-region="advanced-body">
+                <div class="text-muted small">Đang tải lịch sử phiên bản…</div>
+            </div>
+        </details>`;
     if (save) {
         save.disabled = false;
     }
@@ -183,6 +201,47 @@ const showUploadProgress = (root, file, loaded, total, state = 'uploading') => {
     </div>`;
 };
 
+const renderAdvanced = (root, data, versionmode, pinnedversionid) => {
+    const body = root.querySelector('[data-region="advanced-body"]');
+    if (!body) {
+        return;
+    }
+    const versions = data.versions || [];
+    const pinValue = Number(pinnedversionid || data.currentversionid || 0);
+    const history = versions.length ? versions.map((version) => `
+        <div class="border rounded px-2 py-1 mb-1 small">
+            <div class="d-flex justify-content-between gap-2">
+                <strong>v${Number(version.versionno)}</strong>
+                ${version.iscurrent ? '<span class="badge text-bg-primary">Hiện hành</span>' : ''}
+            </div>
+            <div class="text-truncate">${escapeHtml(version.displayfilename)}</div>
+            <div class="text-muted">${formatBytes(version.filesize)} · ${formatDate(version.timecreated)}</div>
+        </div>`).join('') : '<div class="text-muted small">Chưa có phiên bản.</div>';
+    const options = versions.map((version) => `
+        <option value="${Number(version.id)}" ${Number(version.id) === pinValue ? 'selected' : ''}>
+            v${Number(version.versionno)} · ${escapeHtml(version.displayfilename)}
+        </option>`).join('');
+    const canManage = Boolean(data.canmanageversions || data.canreplace);
+    body.innerHTML = `<div class="mb-2"><strong>Lịch sử phiên bản</strong></div>
+        ${history}
+        ${canManage ? `<hr>
+        <div class="small fw-semibold mb-1">Cách reference chọn phiên bản</div>
+        <label class="d-block small mb-1">
+            <input type="radio" name="digiera-version-mode" data-action="version-mode"
+                value="FOLLOW_CURRENT" ${versionmode === 'FOLLOW_CURRENT' ? 'checked' : ''}>
+            Luôn dùng phiên bản mới nhất
+        </label>
+        <label class="d-block small mb-1">
+            <input type="radio" name="digiera-version-mode" data-action="version-mode"
+                value="PINNED_VERSION" ${versionmode === 'PINNED_VERSION' ? 'checked' : ''}>
+            Ghim một phiên bản
+        </label>
+        <select class="form-select form-select-sm mb-2" data-region="pin-version"
+            ${versionmode === 'PINNED_VERSION' ? '' : 'disabled'}>${options}</select>
+        ${data.canreplace ? '<button type="button" class="btn btn-outline-primary btn-sm w-100" data-action="replace-media">Thay thế file</button>' : ''}` :
+        '<div class="text-muted small">Bạn không có quyền quản trị phiên bản.</div>'}`;
+};
+
 export const open = async(editor) => {
     const config = getConfig(editor);
     if (!config.enabled || !config.contextid) {
@@ -194,12 +253,20 @@ export const open = async(editor) => {
     let selected = null;
     let lastData = {items: []};
     let uploading = false;
+    let versionmode = 'FOLLOW_CURRENT';
+    let pinnedversionid = 0;
+    let advancedRequest = 0;
 
     const modal = await DigieraMediaModal.create({templateContext: {canupload: Boolean(config.canupload)}});
     const root = modal.getRoot()[0];
     const uploadInput = root.querySelector('[data-region="upload-input"]');
+    const replaceInput = root.querySelector('[data-region="replace-input"]');
     const dropzone = root.querySelector('[data-region="upload-dropzone"]');
     const rerender = () => renderItems(root, lastData, selected?.uuid || '');
+    const resetVersionChoice = () => {
+        versionmode = 'FOLLOW_CURRENT';
+        pinnedversionid = 0;
+    };
 
     const load = async(query = '') => {
         const list = root.querySelector('[data-region="media-list"]');
@@ -212,6 +279,32 @@ export const open = async(editor) => {
         } catch (error) {
             if (list) {
                 list.innerHTML = '<div class="alert alert-danger">Không tải được thư viện học liệu.</div>';
+            }
+        }
+    };
+
+    const loadAdvanced = async(media) => {
+        const requestId = ++advancedRequest;
+        const body = root.querySelector('[data-region="advanced-body"]');
+        if (!body || !media) {
+            return;
+        }
+        if (!lastData.canreplace && !lastData.canmanageversions) {
+            body.innerHTML = '<div class="text-muted small">Bạn không có quyền quản trị phiên bản.</div>';
+            return;
+        }
+        try {
+            const data = await getMediaVersions(config, media.uuid);
+            if (requestId !== advancedRequest || selected?.uuid !== media.uuid) {
+                return;
+            }
+            if (versionmode === 'PINNED_VERSION' && !pinnedversionid) {
+                pinnedversionid = Number(data.currentversionid || 0);
+            }
+            renderAdvanced(root, data, versionmode, pinnedversionid);
+        } catch (error) {
+            if (requestId === advancedRequest && body) {
+                body.innerHTML = '<div class="alert alert-danger py-1 small">Không tải được lịch sử phiên bản.</div>';
             }
         }
     };
@@ -232,9 +325,11 @@ export const open = async(editor) => {
                 );
                 showUploadProgress(root, file, file.size, file.size, 'verifying');
                 selected = media;
+                resetVersionChoice();
                 tab = 'library';
                 await load('');
                 updatePreview(root, selected);
+                void loadAdvanced(selected);
                 showUploadProgress(root, file, file.size, file.size, 'done');
             }
             showStatus(
@@ -252,11 +347,48 @@ export const open = async(editor) => {
         }
     };
 
+    const replaceSelectedFile = async(file) => {
+        if (!selected || !lastData.canreplace || uploading || !file) {
+            return;
+        }
+        uploading = true;
+        showStatus(root, '');
+        const replacingUuid = selected.uuid;
+        try {
+            showUploadProgress(root, file, 0, file.size);
+            const media = await uploadFile(
+                config,
+                file,
+                (loaded, total) => showUploadProgress(root, file, loaded, total),
+                replacingUuid
+            );
+            showUploadProgress(root, file, file.size, file.size, 'verifying');
+            selected = media;
+            await load(root.querySelector('[data-region="search"]')?.value || '');
+            updatePreview(root, selected);
+            await loadAdvanced(selected);
+            showUploadProgress(root, file, file.size, file.size, 'done');
+            showStatus(
+                root,
+                '<div class="alert alert-success py-2">Đã tạo phiên bản mới và chuyển Current sang phiên bản vừa tải.</div>'
+            );
+        } catch (error) {
+            const message = error?.message || 'Thay thế file thất bại.';
+            showStatus(root, `<div class="alert alert-danger py-2">${escapeHtml(message)}</div>`);
+        } finally {
+            uploading = false;
+            if (replaceInput) {
+                replaceInput.value = '';
+            }
+        }
+    };
+
     root.addEventListener('click', (event) => {
         const nav = event.target.closest('[data-tab]');
         if (nav) {
             tab = nav.dataset.tab;
             selected = null;
+            resetVersionChoice();
             root.querySelectorAll('[data-tab]').forEach((button) => button.classList.toggle('is-active', button === nav));
             updatePreview(root, selected);
             load(root.querySelector('[data-region="search"]')?.value || '');
@@ -272,18 +404,21 @@ export const open = async(editor) => {
                 modified: Number(item.dataset.mediaModified || 0),
                 visibility: item.dataset.mediaVisibility || '',
             };
+            resetVersionChoice();
             rerender();
             updatePreview(root, selected);
+            void loadAdvanced(selected);
+            return;
+        }
+        if (event.target.closest('[data-action="replace-media"]')) {
+            replaceInput?.click();
             return;
         }
         if (event.target.closest('[data-region="upload-dropzone"]')) {
             if (config.canupload) {
                 uploadInput?.click();
             } else {
-                showStatus(
-                    root,
-                    '<div class="alert alert-secondary py-2">Tài khoản hiện tại không có quyền upload.</div>'
-                );
+                showStatus(root, '<div class="alert alert-secondary py-2">Tài khoản hiện tại không có quyền upload.</div>');
             }
             return;
         }
@@ -292,7 +427,26 @@ export const open = async(editor) => {
         }
     });
 
+    root.addEventListener('change', (event) => {
+        const mode = event.target.closest('[data-action="version-mode"]');
+        if (mode) {
+            versionmode = mode.value === 'PINNED_VERSION' ? 'PINNED_VERSION' : 'FOLLOW_CURRENT';
+            const picker = root.querySelector('[data-region="pin-version"]');
+            if (picker) {
+                picker.disabled = versionmode !== 'PINNED_VERSION';
+                if (versionmode === 'PINNED_VERSION' && !pinnedversionid) {
+                    pinnedversionid = Number(picker.value || 0);
+                }
+            }
+            return;
+        }
+        if (event.target.matches('[data-region="pin-version"]')) {
+            pinnedversionid = Number(event.target.value || 0);
+        }
+    });
+
     uploadInput?.addEventListener('change', (event) => void uploadFiles(event.target.files));
+    replaceInput?.addEventListener('change', (event) => void replaceSelectedFile(event.target.files?.[0]));
     dropzone?.addEventListener('dragover', (event) => {
         event.preventDefault();
         event.dataTransfer.dropEffect = 'copy';
@@ -331,7 +485,12 @@ export const open = async(editor) => {
             save.disabled = true;
         }
         try {
-            const reference = await createReference(config, selected.uuid);
+            const reference = await createReference(
+                config,
+                selected.uuid,
+                versionmode,
+                versionmode === 'PINNED_VERSION' ? pinnedversionid : 0
+            );
             editor.selection.moveToBookmark(bookmark);
             ReferenceComponent.insert(editor, reference);
             modal.hide();

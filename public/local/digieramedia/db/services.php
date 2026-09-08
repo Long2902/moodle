@@ -27,6 +27,14 @@ $functions = [
         'ajax' => true,
         'loginrequired' => true,
     ],
+    'local_digieramedia_get_media_versions' => [
+        'classname' => 'local_digieramedia\\external\\get_media_versions',
+        'methodname' => 'execute',
+        'description' => 'Return immutable version history for one DIGIERA Media item.',
+        'type' => 'read',
+        'ajax' => true,
+        'loginrequired' => true,
+    ],
     'local_digieramedia_create_upload_session' => [
         'classname' => 'local_digieramedia\\external\\create_upload_session',
         'methodname' => 'execute',
