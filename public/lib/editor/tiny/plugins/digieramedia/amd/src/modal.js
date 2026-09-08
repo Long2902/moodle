@@ -1,6 +1,6 @@
-import Modal from 'core/modal';
+import ModalSaveCancel from 'core/modal_save_cancel';
 
-export default class DigieraMediaModal extends Modal {
+export default class DigieraMediaModal extends ModalSaveCancel {
     static TYPE = 'tiny_digieramedia/modal';
     static TEMPLATE = 'tiny_digieramedia/modal';
 
@@ -17,11 +17,6 @@ export default class DigieraMediaModal extends Modal {
             'max-width': '1280px',
             'height': '85vh',
         });
-    }
-
-    registerEventListeners() {
-        super.registerEventListeners();
-        this.registerCloseOnCancel();
     }
 }
 
