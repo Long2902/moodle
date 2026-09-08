@@ -222,6 +222,10 @@ const renderAdvanced = (root, data, versionmode, pinnedversionid) => {
             v${Number(version.versionno)} · ${escapeHtml(version.displayfilename)}
         </option>`).join('');
     const canManage = Boolean(data.canmanageversions || data.canreplace);
+    const replaceButton = data.canreplace ?
+        '<button type="button" class="btn btn-outline-primary btn-sm w-100" ' +
+            'data-action="replace-media">Thay thế file</button>' :
+        '';
     body.innerHTML = `<div class="mb-2"><strong>Lịch sử phiên bản</strong></div>
         ${history}
         ${canManage ? `<hr>
@@ -238,7 +242,7 @@ const renderAdvanced = (root, data, versionmode, pinnedversionid) => {
         </label>
         <select class="form-select form-select-sm mb-2" data-region="pin-version"
             ${versionmode === 'PINNED_VERSION' ? '' : 'disabled'}>${options}</select>
-        ${data.canreplace ? '<button type="button" class="btn btn-outline-primary btn-sm w-100" data-action="replace-media">Thay thế file</button>' : ''}` :
+        ${replaceButton}` :
         '<div class="text-muted small">Bạn không có quyền quản trị phiên bản.</div>'}`;
 };
 
