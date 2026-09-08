@@ -32,7 +32,7 @@ final class file_policy {
 
     public function validate(string $filename, string $browsermimetype, int $filesize): array {
         $filename = trim(str_replace("\0", '', basename(str_replace('\\', '/', $filename))));
-        if ($filename === '' || core_text::strlen($filename) > 255) {
+        if ($filename === '' || \core_text::strlen($filename) > 255) {
             throw new \invalid_parameter_exception('Tên tệp không hợp lệ.');
         }
 
