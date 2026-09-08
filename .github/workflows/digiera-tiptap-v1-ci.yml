@@ -79,16 +79,21 @@ jobs:
           cmp /tmp/native_editor.min.js.first ../amd/build/native_editor.min.js
           echo DETERMINISTIC_TIPTAP_BUILD=PASS
 
-      - name: Commit verified generated outputs
+      - name: Commit verified product source and generated outputs
         run: |
           test "$(sha256sum public/local/digieranative/client/package-lock.json | awk '{print $1}')" = "bd28c54a123ae1da0895c60dcc34db8710732e00cb8dffc9c6280810aab7b473"
           test "$(sha256sum public/local/digieranative/amd/build/native_editor.min.js | awk '{print $1}')" = "448f5386ae4213ecf0695c6a7591a3578a90b1c05db748b89e507fff9c7528f7"
           git config user.name 'DIGIERA CI'
           git config user.email 'actions@users.noreply.github.com'
-          git add public/local/digieranative/client/package-lock.json public/local/digieranative/amd/build/native_editor.min.js
-          git commit -m 'build(tiptap): persist verified generated outputs [skip ci]'
+          git add public/local/digieranative public/local/worksheetlibrary public/mod/worksheetgrader
+          if git diff --cached --name-only | grep -Ev '^(public/local/digieranative/|public/local/worksheetlibrary/|public/mod/worksheetgrader/)' ; then
+            echo 'OUT_OF_SCOPE_STAGED_FILE=FAIL'
+            exit 1
+          fi
+          git diff --cached --check
+          git commit -m 'feat(tiptap): materialize verified V1 product source [skip ci]'
           git push origin HEAD:digiera/tiptap-v1-ci
-          echo VERIFIED_GENERATED_OUTPUTS_COMMITTED=PASS
+          echo VERIFIED_PRODUCT_SOURCE_COMMITTED=PASS
 
       - name: Package CI outputs
         run: |
