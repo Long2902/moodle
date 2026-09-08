@@ -19,4 +19,12 @@ $functions = [
         'ajax' => true,
         'loginrequired' => true,
     ],
+    'local_digieramedia_resolve_references' => [
+        'classname' => 'local_digieramedia\\external\\resolve_references',
+        'methodname' => 'execute',
+        'description' => 'Resolve DIGIERA reference UUIDs to media metadata for TinyMCE rehydration.',
+        'type' => 'read',
+        'ajax' => true,
+        'loginrequired' => true,
+    ],
 ];
