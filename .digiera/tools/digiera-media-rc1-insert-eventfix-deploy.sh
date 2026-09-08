@@ -4,6 +4,7 @@ set -Eeuo pipefail
 WEB02="${WEB02:-10.0.10.12}"
 MOODLE="${MOODLE:-/var/www/moodle/public}"
 TINY="$MOODLE/lib/editor/tiny/plugins/digieramedia"
+MOODLE_USER="${MOODLE_USER:-www-data}"
 REF="b9a54d768b9ac3550c9b6f94e531c5cbbeab2138"
 RAW="https://raw.githubusercontent.com/Long2902/moodle/$REF/public/lib/editor/tiny/plugins/digieramedia"
 TS="$(date +%Y%m%d-%H%M%S)"
@@ -21,10 +22,14 @@ FILES=(
   "amd/build/modal.min.js"
 )
 
+run_moodle() {
+  runuser -u "$MOODLE_USER" -- php "$@"
+}
+
 restore_service() {
   set +e
   if [[ "$MAINTENANCE_ON" == "1" ]]; then
-    php "$MOODLE/admin/cli/maintenance.php" --disable >/dev/null 2>&1 || true
+    run_moodle "$MOODLE/admin/cli/maintenance.php" --disable >/dev/null 2>&1 || true
   fi
   if [[ "$CRON_WAS_ACTIVE" == "1" ]]; then
     systemctl start moodle-cron.timer >/dev/null 2>&1 || true
@@ -32,8 +37,10 @@ restore_service() {
 }
 
 fail() {
+  local rc=$?
   echo "INSERT_EVENTFIX_DEPLOY=FAIL"
   restore_service
+  exit "$rc"
 }
 trap fail ERR
 
@@ -56,6 +63,7 @@ reload_fpm_local() {
 
 echo '===== 1. PRECHECK ====='
 ssh -n -o BatchMode=yes -o ConnectTimeout=8 root@"$WEB02" 'true'
+runuser -u "$MOODLE_USER" -- php -r "define('CLI_SCRIPT', true); require '$MOODLE/config.php'; echo 'MOODLE_CLI_USER=PASS DATAROOT='.\$CFG->dataroot.PHP_EOL;"
 echo 'WEB02_SSH=PASS'
 
 mkdir -p "$TMP"
@@ -92,7 +100,7 @@ if systemctl is-active --quiet moodle-cron.timer; then
   CRON_WAS_ACTIVE=1
   systemctl stop moodle-cron.timer
 fi
-php "$MOODLE/admin/cli/maintenance.php" --enable
+run_moodle "$MOODLE/admin/cli/maintenance.php" --enable
 MAINTENANCE_ON=1
 echo 'MAINTENANCE=ON'
 
@@ -108,14 +116,15 @@ ssh -n root@"$WEB02" "grep -Fq 'core/modal_save_cancel' '$TINY/amd/src/modal.js'
 echo 'WEB02_INSERT_EVENT_FILES=PASS'
 
 echo '===== 8. MOODLE UPGRADE ON WEB01 ONLY ====='
-php "$MOODLE/admin/cli/upgrade.php" --non-interactive
-DB_TINY_VERSION="$(php -r "define('CLI_SCRIPT', true); require '$MOODLE/config.php'; echo (string)\$DB->get_field('config_plugins','value',['plugin'=>'tiny_digieramedia','name'=>'version']);")"
+run_moodle "$MOODLE/admin/cli/upgrade.php" --non-interactive
+DB_TINY_VERSION="$(runuser -u "$MOODLE_USER" -- php -r "define('CLI_SCRIPT', true); require '$MOODLE/config.php'; echo (string)\$DB->get_field('config_plugins','value',['plugin'=>'tiny_digieramedia','name'=>'version']);")"
 [[ "$DB_TINY_VERSION" == "2026090801" ]]
 echo "DB_TINY_VERSION=$DB_TINY_VERSION"
 echo 'MOODLE_UPGRADE=PASS'
 
 echo '===== 9. PURGE CACHES + RELOAD PHP-FPM ====='
-php "$MOODLE/admin/cli/purge_caches.php"
+run_moodle "$MOODLE/admin/cli/purge_caches.php"
+ssh -n root@"$WEB02" "runuser -u '$MOODLE_USER' -- php '$MOODLE/admin/cli/purge_caches.php'"
 reload_fpm_local
 ssh -n root@"$WEB02" "svc=\$(systemctl list-units --type=service --all 'php*-fpm.service' --no-legend 2>/dev/null | awk 'NR==1{print \$1}'); if [ -n \"\$svc\" ]; then systemctl reload \"\$svc\"; fi"
 echo 'CACHE_FPM_REFRESH=PASS'
@@ -127,7 +136,7 @@ REMOTE_SHA="$(ssh -n root@"$WEB02" "cd '$TINY' && sha256sum ${FILES[*]}")"
 echo 'TWO_NODE_INSERT_EVENT_PARITY=PASS'
 
 echo '===== 11. RETURN TO SERVICE ====='
-php "$MOODLE/admin/cli/maintenance.php" --disable
+run_moodle "$MOODLE/admin/cli/maintenance.php" --disable
 MAINTENANCE_ON=0
 if [[ "$CRON_WAS_ACTIVE" == "1" ]]; then
   systemctl start moodle-cron.timer
