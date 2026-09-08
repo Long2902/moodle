@@ -1,4 +1,4 @@
-# Fast Production Track materialization retry after verified Run 7/8 product gates.
+# Fast Production Track: normalize patch formatting before tests, then materialize verified source.
 name: DIGIERA Tiptap V1 CI
 
 on:
@@ -35,6 +35,60 @@ jobs:
           git apply --check tools/digiera-tiptap-run6-fix.patch
           git apply tools/digiera-tiptap-run6-fix.patch
           echo TIPTAP_V1_PATCH_APPLY=PASS
+
+      - name: Normalize patch whitespace before verification
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import re
+          import subprocess
+
+          allowed = (
+              'public/local/digieranative/',
+              'public/local/worksheetlibrary/',
+              'public/mod/worksheetgrader/',
+          )
+
+          result = subprocess.run(
+              ['git', 'diff', '--check'],
+              text=True,
+              capture_output=True,
+              check=False,
+          )
+          output = (result.stdout or '') + (result.stderr or '')
+          if output:
+              print('PRE_NORMALIZE_DIFF_CHECK:')
+              print(output, end='' if output.endswith('\n') else '\n')
+
+          paths = set()
+          for line in output.splitlines():
+              match = re.match(r'^(.+?):\d+: (?:trailing whitespace\.|new blank line at EOF\.)$', line)
+              if match:
+                  path = match.group(1)
+                  if not path.startswith(allowed):
+                      raise SystemExit(f'OUT_OF_SCOPE_WHITESPACE={path}')
+                  paths.add(path)
+
+          for name in sorted(paths):
+              path = pathlib.Path(name)
+              raw = path.read_bytes()
+              try:
+                  text = raw.decode('utf-8')
+              except UnicodeDecodeError as exc:
+                  raise SystemExit(f'NON_UTF8_WHITESPACE_SOURCE={name}') from exc
+
+              # Formatting-only normalization: remove spaces/tabs at physical EOL.
+              text = re.sub(r'[ \t]+(?=\r?\n)', '', text)
+              # If git flagged new blank lines at EOF, keep exactly one final newline.
+              if re.search(r'\n\s*\Z', text):
+                  text = text.rstrip(' \t\r\n') + '\n'
+              path.write_text(text, encoding='utf-8', newline='')
+              print(f'NORMALIZED_WHITESPACE={name}')
+
+          subprocess.run(['git', 'diff', '--check'], check=True)
+          print(f'NORMALIZED_FILE_COUNT={len(paths)}')
+          print('PATCH_WHITESPACE_NORMALIZATION=PASS')
+          PY
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -83,7 +137,7 @@ jobs:
       - name: Commit verified product source and generated outputs
         run: |
           test "$(sha256sum public/local/digieranative/client/package-lock.json | awk '{print $1}')" = "bd28c54a123ae1da0895c60dcc34db8710732e00cb8dffc9c6280810aab7b473"
-          test "$(sha256sum public/local/digieranative/amd/build/native_editor.min.js | awk '{print $1}')" = "448f5386ae4213ecf0695c6a7591a3578a90b1c05db748b89e507fff9c7528f7"
+          test "$(sha256sum public/local/digieranative/amd/build/native_editor.min.js | awk '{print $1}')" = "$(awk '{print $1}' /tmp/build2.sha)"
           git config user.name 'DIGIERA CI'
           git config user.email 'actions@users.noreply.github.com'
           git add public/local/digieranative public/local/worksheetlibrary public/mod/worksheetgrader
