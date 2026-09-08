@@ -9,5 +9,5 @@ interface client_interface {
     public function complete_multipart_upload(string $bucket, string $key, string $uploadid, array $parts): array;
     public function abort_multipart_upload(string $bucket, string $key, string $uploadid): void;
     public function delete_object(string $bucket, string $key): void;
-    public function copy_object(string $sourcebucket, string $sourcekey, string $targetkey, ?string $targetbucket = null): array;
+    public function copy_object(string $sourcebucket, string $sourcekey, string $targetbucket, string $targetkey): array;
 }
