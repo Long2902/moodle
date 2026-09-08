@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/digiera-media-v1-rc1-fasttrack
+      - feature/digiera-media-v1-rc1-versioning
     paths:
       - 'public/local/digieramedia/**'
       - 'public/filter/digieramedia/**'
