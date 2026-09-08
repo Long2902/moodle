@@ -7,6 +7,7 @@ REQUIRED = [
     'public/local/digieramedia/db/services.php',
     'public/local/digieramedia/classes/external/search_media.php',
     'public/local/digieramedia/classes/external/create_reference.php',
+    'public/local/digieramedia/classes/external/resolve_references.php',
     'public/lib/editor/tiny/plugins/digieramedia/version.php',
     'public/lib/editor/tiny/plugins/digieramedia/classes/plugininfo.php',
     'public/lib/editor/tiny/plugins/digieramedia/amd/src/plugin.js',
@@ -67,10 +68,25 @@ def test_marker_roundtrip_contract_present():
     assert 'PostProcess' in js
     assert 'BeforeSetContent' in js
 
+def test_reopen_rehydrates_real_media_metadata():
+    services = read('public/local/digieramedia/db/services.php')
+    resolver = read('public/local/digieramedia/classes/external/resolve_references.php')
+    js = read('public/lib/editor/tiny/plugins/digieramedia/amd/src/reference_component.js')
+
+    assert 'local_digieramedia_resolve_references' in services
+    assert 'class resolve_references' in resolver
+    assert 'local_digieramedia_reference' in resolver
+    assert 'local_digieramedia_media' in resolver
+    assert 'hydrateReferenceLabels' in js
+    assert 'local_digieramedia_resolve_references' in js
+    assert "name: 'Học liệu DIGIERA'" not in js
+    assert "name: 'Đang tải…'" in js
+
 def test_external_services_are_registered():
     services = read('public/local/digieramedia/db/services.php')
     assert 'local_digieramedia_search_media' in services
     assert 'local_digieramedia_create_reference' in services
+    assert 'local_digieramedia_resolve_references' in services
 
 def test_shared_seed_visibility_is_insertable():
     search = read('public/local/digieramedia/classes/external/search_media.php')
