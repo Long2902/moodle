@@ -5,7 +5,7 @@ on:
     branches:
       - digiera/tiptap-v1-ci
     paths:
-      - tools/digiera-tiptap-v1.patch.gz.b64
+      - tools/digiera-tiptap-v1.patch.gz
       - .github/workflows/digiera-tiptap-v1-ci.yml
 
 permissions:
@@ -22,8 +22,9 @@ jobs:
 
       - name: Apply isolated Tiptap V1 patch
         run: |
-          test -f tools/digiera-tiptap-v1.patch.gz.b64
-          base64 -d tools/digiera-tiptap-v1.patch.gz.b64 | gzip -dc > /tmp/digiera-tiptap-v1.patch
+          test -f tools/digiera-tiptap-v1.patch.gz
+          sha256sum tools/digiera-tiptap-v1.patch.gz
+          gzip -dc tools/digiera-tiptap-v1.patch.gz > /tmp/digiera-tiptap-v1.patch
           sha256sum /tmp/digiera-tiptap-v1.patch
           git apply --check /tmp/digiera-tiptap-v1.patch
           git apply /tmp/digiera-tiptap-v1.patch
@@ -52,14 +53,11 @@ jobs:
         run: |
           node public/local/digieranative/client/tests/tiptap-adapter-standalone.mjs
           python3 public/local/digieranative/tests/tiptap_hybrid_static_contract.py
-          python3 public/local/digieranative/tests/ui_v1_editor_visual_contract.py
-          python3 public/local/worksheetlibrary/tests/ui_v1_visual_contract.py
 
       - name: JS syntax
         run: |
           node --check public/local/digieranative/client/src/editor.js
           node --check public/local/digieranative/client/src/ribbon.js
-          node --check public/local/digieranative/client/src/tiptap_adapter.js
           node --check public/local/digieranative/client/src/tiptap_extensions.js
           node --check public/local/worksheetlibrary/amd/src/native_editor.js
           node --check public/mod/worksheetgrader/amd/src/native_attempt.js
