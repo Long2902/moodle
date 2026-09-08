@@ -10,7 +10,7 @@ on:
       - .github/workflows/digiera-tiptap-v1-ci.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   tiptap-v1:
@@ -78,6 +78,17 @@ jobs:
           sha256sum ../amd/build/native_editor.min.js | tee /tmp/build2.sha
           cmp /tmp/native_editor.min.js.first ../amd/build/native_editor.min.js
           echo DETERMINISTIC_TIPTAP_BUILD=PASS
+
+      - name: Commit verified generated outputs
+        run: |
+          test "$(sha256sum public/local/digieranative/client/package-lock.json | awk '{print $1}')" = "bd28c54a123ae1da0895c60dcc34db8710732e00cb8dffc9c6280810aab7b473"
+          test "$(sha256sum public/local/digieranative/amd/build/native_editor.min.js | awk '{print $1}')" = "448f5386ae4213ecf0695c6a7591a3578a90b1c05db748b89e507fff9c7528f7"
+          git config user.name 'DIGIERA CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add public/local/digieranative/client/package-lock.json public/local/digieranative/amd/build/native_editor.min.js
+          git commit -m 'build(tiptap): persist verified generated outputs [skip ci]'
+          git push origin HEAD:digiera/tiptap-v1-ci
+          echo VERIFIED_GENERATED_OUTPUTS_COMMITTED=PASS
 
       - name: Package CI outputs
         run: |
