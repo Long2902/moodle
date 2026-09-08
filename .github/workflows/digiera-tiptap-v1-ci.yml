@@ -1,3 +1,4 @@
+# Fast Production Track materialization retry after verified Run 7/8 product gates.
 name: DIGIERA Tiptap V1 CI
 
 on:
