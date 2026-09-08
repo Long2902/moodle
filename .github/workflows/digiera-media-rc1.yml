@@ -55,9 +55,11 @@ jobs:
           test -f public/lib/editor/tiny/plugins/digieramedia/amd/build/plugin.min.js
           test -f public/lib/editor/tiny/plugins/digieramedia/amd/build/modal.min.js
           test -f public/lib/editor/tiny/plugins/digieramedia/amd/build/ui.min.js
+          test -f public/lib/editor/tiny/plugins/digieramedia/amd/build/upload_client.min.js
           test -f public/lib/editor/tiny/plugins/digieramedia/amd/build/reference_component.min.js
           grep -q '"./ui"' public/lib/editor/tiny/plugins/digieramedia/amd/build/commands.min.js
           grep -q '_exports.open' public/lib/editor/tiny/plugins/digieramedia/amd/build/ui.min.js
+          grep -q 'local_digieramedia_create_upload_session' public/lib/editor/tiny/plugins/digieramedia/amd/build/upload_client.min.js
       - name: Set up Moodle PHPUnit
         env:
           dbtype: mysqli
@@ -110,6 +112,7 @@ jobs:
           grep -Fxq 'lib/editor/tiny/plugins/digieramedia/amd/build/plugin.min.js' "$listing"
           grep -Fxq 'lib/editor/tiny/plugins/digieramedia/amd/build/modal.min.js' "$listing"
           grep -Fxq 'lib/editor/tiny/plugins/digieramedia/amd/build/ui.min.js' "$listing"
+          grep -Fxq 'lib/editor/tiny/plugins/digieramedia/amd/build/upload_client.min.js' "$listing"
           grep -Fxq 'lib/editor/tiny/plugins/digieramedia/amd/build/reference_component.min.js' "$listing"
           test -f .digiera/dist/rc1/digiera-stage-seed-pdf.php
           test -f .digiera/dist/rc1/BUILD_INFO.txt
