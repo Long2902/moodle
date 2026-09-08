@@ -34,7 +34,11 @@ const formatDate = (timestamp) => {
     if (!value) {
         return '—';
     }
-    return new Intl.DateTimeFormat('vi-VN', {day: '2-digit', month: '2-digit', year: 'numeric'}).format(new Date(value * 1000));
+    return new Intl.DateTimeFormat('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+    }).format(new Date(value * 1000));
 };
 
 const escapeHtml = (value) => String(value ?? '')
@@ -50,7 +54,12 @@ const normaliseType = (type) => {
 };
 
 const typeLabel = (type) => ({
-    pdf: 'PDF', video: 'VIDEO', image: 'IMAGE', audio: 'AUDIO', office: 'OFFICE', generic: 'FILE',
+    pdf: 'PDF',
+    video: 'VIDEO',
+    image: 'IMAGE',
+    audio: 'AUDIO',
+    office: 'OFFICE',
+    generic: 'FILE',
 })[normaliseType(type)];
 
 const filteredItems = (data, root) => {
@@ -91,7 +100,11 @@ const renderItems = (root, data, selectedUuid) => {
             data-media-size="${Number(item.size || 0)}" data-media-modified="${Number(item.modified || 0)}"
             data-media-visibility="${escapeHtml(item.visibility || '')}">
             <span class="tiny-digieramedia__selectedmark" aria-hidden="true">✓</span>
-            <span class="tiny-digieramedia__thumb"><span class="tiny-digieramedia__fileicon" data-type="${escapeHtml(type)}">${typeLabel(type)}</span></span>
+            <span class="tiny-digieramedia__thumb">
+                <span class="tiny-digieramedia__fileicon" data-type="${escapeHtml(type)}">
+                    ${typeLabel(type)}
+                </span>
+            </span>
             <span class="tiny-digieramedia__name">${escapeHtml(item.name)}</span>
             <span class="tiny-digieramedia__meta">${formatBytes(item.size)} · ${formatDate(item.modified)}</span>
         </button>`;
@@ -107,20 +120,29 @@ const updatePreview = (root, selected) => {
     if (!selected) {
         preview.innerHTML = '<div class="tiny-digieramedia__empty">Chọn một học liệu để xem thông tin.</div>' +
             '<details class="tiny-digieramedia__advanced"><summary>Tùy chọn nâng cao (Admin/KTV)</summary>' +
-            '<div class="tiny-digieramedia__advancedbody">Các thao tác quản trị nâng cao sẽ xuất hiện khi quyền và API tương ứng khả dụng.</div></details>';
+            '<div class="tiny-digieramedia__advancedbody">' +
+            'Các thao tác quản trị nâng cao sẽ xuất hiện khi quyền và API tương ứng khả dụng.</div></details>';
         if (save) {
             save.disabled = true;
         }
         return;
     }
     const type = normaliseType(selected.mediatype);
-    preview.innerHTML = `<div class="tiny-digieramedia__previewbox"><div class="tiny-digieramedia__previewfile" data-type="${escapeHtml(type)}">${typeLabel(type)}</div></div>
+    preview.innerHTML = `<div class="tiny-digieramedia__previewbox">
+        <div class="tiny-digieramedia__previewfile" data-type="${escapeHtml(type)}">
+            ${typeLabel(type)}
+        </div>
+        </div>
         <h4>${escapeHtml(selected.name)}</h4><dl>
-        <dt>Loại</dt><dd>${escapeHtml(typeLabel(type))}</dd><dt>Dung lượng</dt><dd>${formatBytes(selected.size)}</dd>
-        <dt>Cập nhật</dt><dd>${formatDate(selected.modified)}</dd><dt>Phạm vi</dt><dd>${escapeHtml(selected.visibility || '—')}</dd>
+        <dt>Loại</dt><dd>${escapeHtml(typeLabel(type))}</dd>
+        <dt>Dung lượng</dt><dd>${formatBytes(selected.size)}</dd>
+        <dt>Cập nhật</dt><dd>${formatDate(selected.modified)}</dd>
+        <dt>Phạm vi</dt><dd>${escapeHtml(selected.visibility || '—')}</dd>
         <dt>Trạng thái</dt><dd>Sẵn sàng</dd></dl>
         <details class="tiny-digieramedia__advanced"><summary>Tùy chọn nâng cao (Admin/KTV)</summary>
-        <div class="tiny-digieramedia__advancedbody">Phiên bản, vị trí sử dụng, thay thế và quản trị vòng đời sẽ được nối vào panel này theo API quản trị.</div></details>`;
+        <div class="tiny-digieramedia__advancedbody">
+            Phiên bản, vị trí sử dụng, thay thế và quản trị vòng đời sẽ được nối vào panel này theo API quản trị.
+        </div></details>`;
     if (save) {
         save.disabled = false;
     }
@@ -140,12 +162,25 @@ const showUploadProgress = (root, file, loaded, total, state = 'uploading') => {
     }
     const safeTotal = Math.max(1, Number(total || file.size || 1));
     const percent = Math.min(100, Math.round((Number(loaded || 0) / safeTotal) * 100));
-    const label = state === 'verifying' ? 'Đang xác minh trên R2…' : state === 'done' ? 'Đã tải lên' : `Đang tải lên ${percent}%`;
-    queue.innerHTML = `<div class="border rounded p-2 mb-2"><div class="d-flex justify-content-between gap-2">
-        <strong class="text-truncate">${escapeHtml(file.name)}</strong><span>${escapeHtml(label)}</span></div>
-        <div class="progress mt-2" role="progressbar" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100">
-        <div class="progress-bar" style="width:${percent}%"></div></div>
-        <div class="small text-muted mt-1">${formatBytes(loaded)} / ${formatBytes(safeTotal)}</div></div>`;
+    let label = `Đang tải lên ${percent}%`;
+    if (state === 'verifying') {
+        label = 'Đang xác minh trên R2…';
+    } else if (state === 'done') {
+        label = 'Đã tải lên';
+    }
+    queue.innerHTML = `<div class="border rounded p-2 mb-2">
+        <div class="d-flex justify-content-between gap-2">
+            <strong class="text-truncate">${escapeHtml(file.name)}</strong>
+            <span>${escapeHtml(label)}</span>
+        </div>
+        <div class="progress mt-2" role="progressbar" aria-valuenow="${percent}"
+            aria-valuemin="0" aria-valuemax="100">
+            <div class="progress-bar" style="width:${percent}%"></div>
+        </div>
+        <div class="small text-muted mt-1">
+            ${formatBytes(loaded)} / ${formatBytes(safeTotal)}
+        </div>
+    </div>`;
 };
 
 export const open = async(editor) => {
@@ -190,7 +225,11 @@ export const open = async(editor) => {
         try {
             for (const file of [...files]) {
                 showUploadProgress(root, file, 0, file.size);
-                const media = await uploadFile(config, file, (loaded, total) => showUploadProgress(root, file, loaded, total));
+                const media = await uploadFile(
+                    config,
+                    file,
+                    (loaded, total) => showUploadProgress(root, file, loaded, total)
+                );
                 showUploadProgress(root, file, file.size, file.size, 'verifying');
                 selected = media;
                 tab = 'library';
@@ -198,7 +237,10 @@ export const open = async(editor) => {
                 updatePreview(root, selected);
                 showUploadProgress(root, file, file.size, file.size, 'done');
             }
-            showStatus(root, '<div class="alert alert-success py-2">Upload R2 hoàn tất. Học liệu đã sẵn sàng để chèn.</div>');
+            showStatus(
+                root,
+                '<div class="alert alert-success py-2">Upload R2 hoàn tất. Học liệu đã sẵn sàng để chèn.</div>'
+            );
         } catch (error) {
             const message = error?.message || 'Upload R2 thất bại.';
             showStatus(root, `<div class="alert alert-danger py-2">${escapeHtml(message)}</div>`);
@@ -223,8 +265,11 @@ export const open = async(editor) => {
         const item = event.target.closest('[data-action="select-media"]');
         if (item) {
             selected = {
-                uuid: item.dataset.mediaUuid, name: item.dataset.mediaName, mediatype: item.dataset.mediaType,
-                size: Number(item.dataset.mediaSize || 0), modified: Number(item.dataset.mediaModified || 0),
+                uuid: item.dataset.mediaUuid,
+                name: item.dataset.mediaName,
+                mediatype: item.dataset.mediaType,
+                size: Number(item.dataset.mediaSize || 0),
+                modified: Number(item.dataset.mediaModified || 0),
                 visibility: item.dataset.mediaVisibility || '',
             };
             rerender();
@@ -235,7 +280,10 @@ export const open = async(editor) => {
             if (config.canupload) {
                 uploadInput?.click();
             } else {
-                showStatus(root, '<div class="alert alert-secondary py-2">Tài khoản hiện tại không có quyền upload.</div>');
+                showStatus(
+                    root,
+                    '<div class="alert alert-secondary py-2">Tài khoản hiện tại không có quyền upload.</div>'
+                );
             }
             return;
         }
