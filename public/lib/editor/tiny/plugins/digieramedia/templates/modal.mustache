@@ -11,35 +11,33 @@
         <div class="tiny-digieramedia__columns">
             <aside class="digiera-media-modal__column tiny-digieramedia__nav" aria-label="Điều hướng học liệu">
                 <button type="button" class="is-active" data-tab="library" data-view="upload">
-                    <span class="tiny-digieramedia__navicon" aria-hidden="true">↑</span>
-                    <span>Tải lên & chèn</span>
+                    <span class="tiny-digieramedia__navicon" aria-hidden="true">↑</span><span>Tải lên & chèn</span>
                 </button>
                 <button type="button" data-tab="library" data-view="library">
-                    <span class="tiny-digieramedia__navicon" aria-hidden="true">▣</span>
-                    <span>Thư viện</span>
+                    <span class="tiny-digieramedia__navicon" aria-hidden="true">▣</span><span>Thư viện</span>
                 </button>
                 <button type="button" data-tab="recent" data-view="recent">
-                    <span class="tiny-digieramedia__navicon" aria-hidden="true">◷</span>
-                    <span>Đã dùng gần đây</span>
+                    <span class="tiny-digieramedia__navicon" aria-hidden="true">◷</span><span>Đã dùng gần đây</span>
                 </button>
                 <button type="button" class="tiny-digieramedia__navtrash" data-tab="trash" data-view="trash">
-                    <span class="tiny-digieramedia__navicon" aria-hidden="true">⌫</span>
-                    <span>Thùng rác</span>
+                    <span class="tiny-digieramedia__navicon" aria-hidden="true">⌫</span><span>Thùng rác</span>
                 </button>
             </aside>
 
             <section class="digiera-media-modal__column tiny-digieramedia__center">
                 <div class="tiny-digieramedia__scroll">
-                    <div class="tiny-digieramedia__dropzone" data-region="upload-dropzone">
+                    <input type="file" class="d-none" data-region="upload-input" multiple
+                        accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.mp4,.webm,.mp3,.wav,.m4a,.jpg,.jpeg,.png,.webp">
+                    <div class="tiny-digieramedia__dropzone" data-region="upload-dropzone" role="button" tabindex="0">
                         <div class="tiny-digieramedia__dropicon" aria-hidden="true">⇧</div>
                         <div class="tiny-digieramedia__droptext">
                             Kéo thả tệp vào đây hoặc <span>nhấp để chọn tệp</span>
                         </div>
                         <div class="tiny-digieramedia__dropsub">
-                            Hỗ trợ: PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, MP4, MP3, JPG, PNG
+                            Hỗ trợ: PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, MP4, WEBM, MP3, WAV, M4A, JPG, PNG, WEBP
                         </div>
                         {{#canupload}}
-                            <div class="tiny-digieramedia__uploadnote">Live R2 upload sẽ được bật sau bước cấu hình/verify R2 của RC1.</div>
+                            <div class="tiny-digieramedia__uploadnote">Tệp được tải trực tiếp từ trình duyệt lên Cloudflare R2; Moodle chỉ cấp quyền và lưu metadata.</div>
                         {{/canupload}}
                         {{^canupload}}
                             <div class="tiny-digieramedia__uploadnote">Tài khoản hiện tại không có quyền upload.</div>
@@ -56,29 +54,20 @@
                             <input class="form-control" type="search" placeholder="Tìm kiếm học liệu..." data-region="search">
                         </label>
                         <select class="form-select" data-region="type-filter" aria-label="Lọc theo định dạng">
-                            <option value="">Tất cả định dạng</option>
-                            <option value="pdf">PDF</option>
-                            <option value="video">Video</option>
-                            <option value="image">Hình ảnh</option>
-                            <option value="audio">Âm thanh</option>
-                            <option value="office">Office</option>
-                            <option value="generic">Tệp khác</option>
+                            <option value="">Tất cả định dạng</option><option value="pdf">PDF</option><option value="video">Video</option>
+                            <option value="image">Hình ảnh</option><option value="audio">Âm thanh</option><option value="office">Office</option><option value="generic">Tệp khác</option>
                         </select>
                         <select class="form-select" data-region="sort" aria-label="Sắp xếp học liệu">
-                            <option value="newest">Ngày mới nhất</option>
-                            <option value="oldest">Ngày cũ nhất</option>
-                            <option value="name">Tên A-Z</option>
+                            <option value="newest">Ngày mới nhất</option><option value="oldest">Ngày cũ nhất</option><option value="name">Tên A-Z</option>
                         </select>
                     </div>
-
                     <div class="tiny-digieramedia__list" data-region="media-list" aria-live="polite"></div>
                 </div>
             </section>
 
             <aside class="digiera-media-modal__column tiny-digieramedia__preview" data-region="preview">
                 <div class="tiny-digieramedia__empty">Chọn một học liệu để xem thông tin.</div>
-                <details class="tiny-digieramedia__advanced">
-                    <summary>Tùy chọn nâng cao (Admin/KTV)</summary>
+                <details class="tiny-digieramedia__advanced"><summary>Tùy chọn nâng cao (Admin/KTV)</summary>
                     <div class="tiny-digieramedia__advancedbody">Các thao tác quản trị nâng cao sẽ xuất hiện khi quyền và API tương ứng khả dụng.</div>
                 </details>
             </aside>

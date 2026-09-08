@@ -27,4 +27,20 @@ $functions = [
         'ajax' => true,
         'loginrequired' => true,
     ],
+    'local_digieramedia_create_upload_session' => [
+        'classname' => 'local_digieramedia\\external\\create_upload_session',
+        'methodname' => 'execute',
+        'description' => 'Authorize a server-owned direct Cloudflare R2 single-PUT upload.',
+        'type' => 'write',
+        'ajax' => true,
+        'loginrequired' => true,
+    ],
+    'local_digieramedia_finalize_upload' => [
+        'classname' => 'local_digieramedia\\external\\finalize_upload',
+        'methodname' => 'execute',
+        'description' => 'Verify an R2 object and idempotently commit DIGIERA Media metadata.',
+        'type' => 'write',
+        'ajax' => true,
+        'loginrequired' => true,
+    ],
 ];

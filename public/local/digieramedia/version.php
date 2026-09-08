@@ -3,7 +3,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_digieramedia';
-$plugin->version = 2026090802;
+$plugin->version = 2026090803;
 $plugin->requires = 2025100600;
 $plugin->maturity = MATURITY_RC;
-$plugin->release = '1.0.0-rc1-fasttrack-reference-resolver';
+$plugin->release = '1.0.0-rc1-fasttrack-r2-singleput';
