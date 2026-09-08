@@ -25,19 +25,10 @@ FILES=(
   "lib/editor/tiny/plugins/digieramedia/amd/build/reference_component.min.js"
 )
 
-moodle_cli_local() {
-  runuser -u "$MOODLE_USER" -- bash -c "cd '$MOODLE' && php '$1' ${2:-}"
-}
-
-moodle_php_local() {
-  local code="$1"
-  runuser -u "$MOODLE_USER" -- bash -c "cd '$MOODLE' && php -r '$code'"
-}
-
 restore_service() {
   set +e
   if [[ "$MAINTENANCE_ON" == "1" ]]; then
-    runuser -u "$MOODLE_USER" -- bash -c "cd '$MOODLE' && php '$MOODLE/admin/cli/maintenance.php' --disable" >/dev/null 2>&1 || true
+    (cd "$MOODLE" && runuser -u "$MOODLE_USER" -- php admin/cli/maintenance.php --disable) >/dev/null 2>&1 || true
   fi
   if [[ "$CRON_WAS_ACTIVE" == "1" ]]; then
     systemctl start moodle-cron.timer >/dev/null 2>&1 || true
@@ -64,8 +55,8 @@ echo '===== 1. PRECHECK ====='
 ssh -n -o BatchMode=yes -o ConnectTimeout=8 root@"$WEB02" 'true'
 echo 'WEB02_SSH=PASS'
 
-runuser -u "$MOODLE_USER" -- bash -c "cd '$MOODLE' && php -r 'define(\"CLI_SCRIPT\", true); require \"$MOODLE/config.php\"; echo \"WEB01_MOODLE_CLI=PASS DATAROOT=\".\$CFG->dataroot.PHP_EOL;'"
-ssh -n root@"$WEB02" "runuser -u '$MOODLE_USER' -- bash -c 'cd \"$MOODLE\" && php -r '\''define(\"CLI_SCRIPT\", true); require \"$MOODLE/config.php\"; echo \"WEB02_MOODLE_CLI=PASS DATAROOT=\".\$CFG->dataroot.PHP_EOL;'\'''"
+(cd "$MOODLE" && runuser -u "$MOODLE_USER" -- php -r 'define("CLI_SCRIPT", true); require "config.php"; echo "WEB01_MOODLE_CLI=PASS DATAROOT=".$CFG->dataroot.PHP_EOL;')
+ssh -n root@"$WEB02" "cd '$MOODLE' && runuser -u '$MOODLE_USER' -- php -r 'define(\"CLI_SCRIPT\", true); require \"config.php\"; echo \"WEB02_MOODLE_CLI=PASS\".PHP_EOL;'"
 echo 'TWO_NODE_MOODLE_CLI=PASS'
 
 mkdir -p "$TMP"
@@ -112,7 +103,7 @@ if systemctl is-active --quiet moodle-cron.timer; then
   CRON_WAS_ACTIVE=1
   systemctl stop moodle-cron.timer
 fi
-runuser -u "$MOODLE_USER" -- bash -c "cd '$MOODLE' && php '$MOODLE/admin/cli/maintenance.php' --enable"
+(cd "$MOODLE" && runuser -u "$MOODLE_USER" -- php admin/cli/maintenance.php --enable)
 MAINTENANCE_ON=1
 echo 'MAINTENANCE=ON'
 
@@ -130,11 +121,11 @@ echo 'WEB02_REHYDRATE_FILES=PASS'
 
 
 echo '===== 8. MOODLE UPGRADE AS WWW-DATA ====='
-runuser -u "$MOODLE_USER" -- bash -c "cd '$MOODLE' && php '$MOODLE/admin/cli/upgrade.php' --non-interactive"
+(cd "$MOODLE" && runuser -u "$MOODLE_USER" -- php admin/cli/upgrade.php --non-interactive)
 echo 'MOODLE_UPGRADE=PASS'
 
-DB_LOCAL="$(runuser -u "$MOODLE_USER" -- bash -c "cd '$MOODLE' && php -r 'define(\"CLI_SCRIPT\", true); require \"$MOODLE/config.php\"; echo (string)\$DB->get_field(\"config_plugins\",\"value\",[\"plugin\"=>\"local_digieramedia\",\"name\"=>\"version\"]);'")"
-DB_TINY="$(runuser -u "$MOODLE_USER" -- bash -c "cd '$MOODLE' && php -r 'define(\"CLI_SCRIPT\", true); require \"$MOODLE/config.php\"; echo (string)\$DB->get_field(\"config_plugins\",\"value\",[\"plugin\"=>\"tiny_digieramedia\",\"name\"=>\"version\"]);'")"
+DB_LOCAL="$(cd "$MOODLE" && runuser -u "$MOODLE_USER" -- php -r 'define("CLI_SCRIPT", true); require "config.php"; echo (string)$DB->get_field("config_plugins", "value", ["plugin" => "local_digieramedia", "name" => "version"]);')"
+DB_TINY="$(cd "$MOODLE" && runuser -u "$MOODLE_USER" -- php -r 'define("CLI_SCRIPT", true); require "config.php"; echo (string)$DB->get_field("config_plugins", "value", ["plugin" => "tiny_digieramedia", "name" => "version"]);')"
 [[ "$DB_LOCAL" == "$EXPECTED_LOCAL" ]]
 [[ "$DB_TINY" == "$EXPECTED_TINY" ]]
 echo "DB_LOCAL_VERSION=$DB_LOCAL"
@@ -143,8 +134,8 @@ echo 'DB_VERSION=PASS'
 
 
 echo '===== 9. PURGE CACHES + RELOAD FPM ====='
-runuser -u "$MOODLE_USER" -- bash -c "cd '$MOODLE' && php '$MOODLE/admin/cli/purge_caches.php'"
-ssh -n root@"$WEB02" "runuser -u '$MOODLE_USER' -- bash -c 'cd \"$MOODLE\" && php \"$MOODLE/admin/cli/purge_caches.php\"'"
+(cd "$MOODLE" && runuser -u "$MOODLE_USER" -- php admin/cli/purge_caches.php)
+ssh -n root@"$WEB02" "cd '$MOODLE' && runuser -u '$MOODLE_USER' -- php admin/cli/purge_caches.php"
 reload_fpm_local
 ssh -n root@"$WEB02" "svc=\$(systemctl list-units --type=service --all 'php*-fpm.service' --no-legend 2>/dev/null | awk 'NR==1{print \$1}'); if [ -n \"\$svc\" ]; then systemctl reload \"\$svc\"; fi"
 echo 'CACHE_FPM_REFRESH=PASS'
@@ -158,7 +149,7 @@ echo 'TWO_NODE_REHYDRATE_PARITY=PASS'
 
 
 echo '===== 11. RETURN TO SERVICE ====='
-runuser -u "$MOODLE_USER" -- bash -c "cd '$MOODLE' && php '$MOODLE/admin/cli/maintenance.php' --disable"
+(cd "$MOODLE" && runuser -u "$MOODLE_USER" -- php admin/cli/maintenance.php --disable)
 MAINTENANCE_ON=0
 if [[ "$CRON_WAS_ACTIVE" == "1" ]]; then
   systemctl start moodle-cron.timer
