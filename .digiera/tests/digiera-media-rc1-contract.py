@@ -166,6 +166,31 @@ def test_tiny_uses_moodle_plugin_option_names():
     for key in ['enabled', 'contextid', 'courseid', 'canupload']:
         assert repr(key) in options or f'"{key}"' in options
 
+def test_replace_and_versioning_contract():
+    services = read('public/local/digieramedia/db/services.php')
+    install = read('public/local/digieramedia/db/install.xml')
+    session = read('public/local/digieramedia/classes/service/upload_session_service.php')
+    finalize = read('public/local/digieramedia/classes/service/upload_finalize_service.php')
+    create = read('public/local/digieramedia/classes/external/create_reference.php')
+    uploadjs = read('public/lib/editor/tiny/plugins/digieramedia/amd/src/upload_client.js')
+    ui = read('public/lib/editor/tiny/plugins/digieramedia/amd/src/ui.js')
+
+    versions = ROOT / 'public/local/digieramedia/classes/external/get_media_versions.php'
+    assert versions.is_file(), 'get_media_versions endpoint is required'
+    assert 'local_digieramedia_get_media_versions' in services
+    assert 'targetmediaid' in install
+    assert 'replacemediauuid' in session
+    assert 'targetmediaid' in finalize
+    assert 'versionno' in finalize
+    assert 'currentversionid' in finalize
+    assert 'PINNED_VERSION' in create
+    assert 'FOLLOW_CURRENT' in create
+    assert 'replacemediauuid' in uploadjs
+    assert 'Thay thế file' in ui
+    assert 'Lịch sử phiên bản' in ui
+    assert 'PINNED_VERSION' in ui
+    assert 'FOLLOW_CURRENT' in ui
+
 if __name__ == '__main__':
     tests = [value for name, value in sorted(globals().items()) if name.startswith('test_') and callable(value)]
     for test in tests:
