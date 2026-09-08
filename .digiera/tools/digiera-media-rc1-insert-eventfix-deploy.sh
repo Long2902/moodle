@@ -74,21 +74,18 @@ grep -Fq '2026090801' "$TMP/version.php"
 echo 'INSERT_EVENTFIX_SOURCE_CONTRACT=PASS'
 (cd "$TMP" && sha256sum "${FILES[@]}")
 
-
 echo '===== 3. SNAPSHOT TINY PLUGIN ON BOTH NODES ====='
 tar -C "$(dirname "$TINY")" -czf "$SNAP1" "$(basename "$TINY")"
 ssh -n root@"$WEB02" "tar -C '$(dirname "$TINY")' -czf '$SNAP2' '$(basename "$TINY")'"
 echo "WEB01_SNAPSHOT=$SNAP1"
 echo "WEB02_SNAPSHOT=$SNAP2"
 
-
 echo '===== 4. STAGE VERIFIED PAYLOAD TO WEB02 ====='
-tar -C "$TMP" -cf - "${FILES[@]}" | ssh -n root@"$WEB02" "rm -rf '$REMOTE_TMP'; mkdir -p '$REMOTE_TMP'; tar -C '$REMOTE_TMP' -xf -"
+tar -C "$TMP" -cf - "${FILES[@]}" | ssh root@"$WEB02" "rm -rf '$REMOTE_TMP'; mkdir -p '$REMOTE_TMP'; tar -C '$REMOTE_TMP' -xf -"
 LOCAL_STAGE_SHA="$(cd "$TMP" && sha256sum "${FILES[@]}")"
 REMOTE_STAGE_SHA="$(ssh -n root@"$WEB02" "cd '$REMOTE_TMP' && sha256sum ${FILES[*]}")"
 [[ "$LOCAL_STAGE_SHA" == "$REMOTE_STAGE_SHA" ]]
 echo 'WEB02_STAGE_IDENTITY=PASS'
-
 
 echo '===== 5. QUIESCE CRON + ENABLE MAINTENANCE ====='
 if systemctl is-active --quiet moodle-cron.timer; then
@@ -99,17 +96,16 @@ php "$MOODLE/admin/cli/maintenance.php" --enable
 MAINTENANCE_ON=1
 echo 'MAINTENANCE=ON'
 
-
 echo '===== 6. INSTALL WEB01 ====='
 install_payload "$TMP" "$TINY"
 grep -Fq "core/modal_save_cancel" "$TINY/amd/src/modal.js"
 echo 'WEB01_INSERT_EVENT_FILES=PASS'
 
-
 echo '===== 7. INSTALL WEB02 ====='
-ssh -n root@"$WEB02" "set -Eeuo pipefail; for f in ${FILES[*]}; do install -D -m 0644 '$REMOTE_TMP/'\"\$f\" '$TINY/'\"\$f\"; done; grep -Fq 'core/modal_save_cancel' '$TINY/amd/src/modal.js'"
+ssh -n root@"$WEB02" "mkdir -p '$TINY/templates' '$TINY/amd/src' '$TINY/amd/build'"
+tar -C "$TMP" -cf - "${FILES[@]}" | ssh root@"$WEB02" "tar -C '$TINY' -xf -"
+ssh -n root@"$WEB02" "grep -Fq 'core/modal_save_cancel' '$TINY/amd/src/modal.js'"
 echo 'WEB02_INSERT_EVENT_FILES=PASS'
-
 
 echo '===== 8. MOODLE UPGRADE ON WEB01 ONLY ====='
 php "$MOODLE/admin/cli/upgrade.php" --non-interactive
@@ -118,20 +114,17 @@ DB_TINY_VERSION="$(php -r "define('CLI_SCRIPT', true); require '$MOODLE/config.p
 echo "DB_TINY_VERSION=$DB_TINY_VERSION"
 echo 'MOODLE_UPGRADE=PASS'
 
-
 echo '===== 9. PURGE CACHES + RELOAD PHP-FPM ====='
 php "$MOODLE/admin/cli/purge_caches.php"
 reload_fpm_local
 ssh -n root@"$WEB02" "svc=\$(systemctl list-units --type=service --all 'php*-fpm.service' --no-legend 2>/dev/null | awk 'NR==1{print \$1}'); if [ -n \"\$svc\" ]; then systemctl reload \"\$svc\"; fi"
 echo 'CACHE_FPM_REFRESH=PASS'
 
-
 echo '===== 10. VERIFY TWO-NODE PARITY ====='
 LOCAL_SHA="$(cd "$TINY" && sha256sum "${FILES[@]}")"
 REMOTE_SHA="$(ssh -n root@"$WEB02" "cd '$TINY' && sha256sum ${FILES[*]}")"
 [[ "$LOCAL_SHA" == "$REMOTE_SHA" ]]
 echo 'TWO_NODE_INSERT_EVENT_PARITY=PASS'
-
 
 echo '===== 11. RETURN TO SERVICE ====='
 php "$MOODLE/admin/cli/maintenance.php" --disable
