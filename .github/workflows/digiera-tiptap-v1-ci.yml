@@ -6,6 +6,7 @@ on:
       - digiera/tiptap-v1-ci
     paths:
       - tools/digiera-tiptap-v1.patch.gz
+      - tools/digiera-tiptap-run6-fix.patch
       - .github/workflows/digiera-tiptap-v1-ci.yml
 
 permissions:
@@ -23,11 +24,15 @@ jobs:
       - name: Apply isolated Tiptap V1 patch
         run: |
           test -f tools/digiera-tiptap-v1.patch.gz
+          test -f tools/digiera-tiptap-run6-fix.patch
           sha256sum tools/digiera-tiptap-v1.patch.gz
           gzip -dc tools/digiera-tiptap-v1.patch.gz > /tmp/digiera-tiptap-v1.patch
           sha256sum /tmp/digiera-tiptap-v1.patch
+          sha256sum tools/digiera-tiptap-run6-fix.patch
           git apply --check /tmp/digiera-tiptap-v1.patch
           git apply /tmp/digiera-tiptap-v1.patch
+          git apply --check tools/digiera-tiptap-run6-fix.patch
+          git apply tools/digiera-tiptap-run6-fix.patch
           echo TIPTAP_V1_PATCH_APPLY=PASS
 
       - name: Setup Node
@@ -59,6 +64,7 @@ jobs:
           node --check public/local/digieranative/client/src/editor.js
           node --check public/local/digieranative/client/src/ribbon.js
           node --check public/local/digieranative/client/src/tiptap_extensions.js
+          node --check public/local/digieranative/client/src/paste.js
           node --check public/local/worksheetlibrary/amd/src/native_editor.js
           node --check public/mod/worksheetgrader/amd/src/native_attempt.js
 
