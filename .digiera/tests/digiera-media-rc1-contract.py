@@ -8,11 +8,19 @@ REQUIRED = [
     'public/local/digieramedia/classes/external/search_media.php',
     'public/local/digieramedia/classes/external/create_reference.php',
     'public/local/digieramedia/classes/external/resolve_references.php',
+    'public/local/digieramedia/classes/r2/config.php',
+    'public/local/digieramedia/classes/r2/sigv4_client.php',
+    'public/local/digieramedia/classes/service/file_policy.php',
+    'public/local/digieramedia/classes/service/upload_session_service.php',
+    'public/local/digieramedia/classes/service/upload_finalize_service.php',
+    'public/local/digieramedia/classes/external/create_upload_session.php',
+    'public/local/digieramedia/classes/external/finalize_upload.php',
     'public/lib/editor/tiny/plugins/digieramedia/version.php',
     'public/lib/editor/tiny/plugins/digieramedia/classes/plugininfo.php',
     'public/lib/editor/tiny/plugins/digieramedia/amd/src/plugin.js',
     'public/lib/editor/tiny/plugins/digieramedia/amd/src/modal.js',
     'public/lib/editor/tiny/plugins/digieramedia/amd/src/ui.js',
+    'public/lib/editor/tiny/plugins/digieramedia/amd/src/upload_client.js',
     'public/lib/editor/tiny/plugins/digieramedia/amd/src/reference_component.js',
     'public/lib/editor/tiny/plugins/digieramedia/templates/modal.mustache',
     'public/lib/editor/tiny/plugins/digieramedia/styles.css',
@@ -81,6 +89,38 @@ def test_reopen_rehydrates_real_media_metadata():
     assert 'local_digieramedia_resolve_references' in js
     assert "name: 'Học liệu DIGIERA'" not in js
     assert "name: 'Đang tải…'" in js
+
+def test_live_r2_single_put_contract():
+    services = read('public/local/digieramedia/db/services.php')
+    r2config = read('public/local/digieramedia/classes/r2/config.php')
+    r2client = read('public/local/digieramedia/classes/r2/sigv4_client.php')
+    session = read('public/local/digieramedia/classes/service/upload_session_service.php')
+    finalize = read('public/local/digieramedia/classes/service/upload_finalize_service.php')
+    uploadjs = read('public/lib/editor/tiny/plugins/digieramedia/amd/src/upload_client.js')
+    ui = read('public/lib/editor/tiny/plugins/digieramedia/amd/src/ui.js')
+    tpl = read('public/lib/editor/tiny/plugins/digieramedia/templates/modal.mustache')
+
+    assert 'local_digieramedia_create_upload_session' in services
+    assert 'local_digieramedia_finalize_upload' in services
+    assert 'DIGIERA_R2_SECRET_ACCESS_KEY' in r2config
+    assert '/etc/digiera/r2.php' in r2config
+    assert 'presign_put' in r2client
+    assert 'head_object' in r2client
+    assert 'UNSIGNED-PAYLOAD' in r2client
+    assert 'targetkey' in session and 'targetbucket' in session
+    assert 'committedmediaid' in finalize
+    assert 'local_digieramedia_media' in finalize
+    assert 'local_digieramedia_version' in finalize
+    assert 'XMLHttpRequest' in uploadjs
+    assert 'local_digieramedia_create_upload_session' in uploadjs
+    assert 'local_digieramedia_finalize_upload' in uploadjs
+    assert "from './upload_client'" in ui
+    assert 'data-region="upload-input"' in tpl
+    assert 'Live R2 upload sẽ được bật sau bước cấu hình/verify R2 của RC1.' not in tpl
+
+    joined = '\n'.join([r2config, r2client, session, finalize, uploadjs])
+    assert 'SECRET_ACCESS_KEY=' not in joined
+    assert 'Authorization: Bearer' not in joined
 
 def test_external_services_are_registered():
     services = read('public/local/digieramedia/db/services.php')
