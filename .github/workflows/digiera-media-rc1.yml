@@ -11,6 +11,7 @@ on:
       - 'public/lib/editor/tiny/plugins/digieramedia/**'
       - '.digiera/tests/digiera-media-rc1-contract.py'
       - '.digiera/tools/digiera-stage-seed-pdf.php'
+      - '.digiera/tools/digiera-media-rc1-versioning-deploy.sh'
       - '.digiera/rc1/**'
       - '.github/workflows/digiera-media-rc1.yml'
   workflow_dispatch:
@@ -45,6 +46,7 @@ jobs:
           set -euo pipefail
           python3 .digiera/tests/digiera-media-rc1-contract.py
           php -l .digiera/tools/digiera-stage-seed-pdf.php
+          bash -n .digiera/tools/digiera-media-rc1-versioning-deploy.sh
           find public/local/digieramedia public/filter/digieramedia public/lib/editor/tiny/plugins/digieramedia -type f -name '*.php' -print0 | sort -z | xargs -0 -r -n1 php -l
           find public/lib/editor/tiny/plugins/digieramedia/amd/src -type f -name '*.js' -print0 | sort -z | xargs -0 -r -n1 node --check
       - name: Build TinyMCE AMD
