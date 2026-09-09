@@ -1,0 +1,81 @@
+name: DIGIERA Media lifecycle PHPUnit diagnostic
+
+on:
+  push:
+    branches:
+      - feature/digiera-media-v1-rc1-lifecycle
+    paths:
+      - '.github/workflows/digiera-media-lifecycle-phpunitdiag.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  phpunit-diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: MySQL 8.4
+        uses: moodlehq/mysql-action@v1
+        with:
+          collation server: utf8mb4_bin
+          mysql version: 8.4
+          mysql database: test
+          mysql user: test
+          mysql password: test
+          use tmpfs: true
+          tmpfs size: '1024M'
+          extra conf: --skip-log-bin
+
+      - name: PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.3
+          ini-values: max_input_vars=5000
+          coverage: none
+
+      - name: Checkout lifecycle branch
+        uses: actions/checkout@v4
+
+      - name: Set up Moodle PHPUnit
+        env:
+          dbtype: mysqli
+        shell: bash
+        run: |
+          echo "pathtophp=$(which php)" >> "$GITHUB_ENV"
+          cp .github/workflows/config-template.php config.php
+          mkdir -p ../moodledata
+          sudo locale-gen en_AU.UTF-8
+          php public/admin/tool/phpunit/cli/init.php --no-composer-self-update
+
+      - name: Capture lifecycle tests separately
+        env:
+          dbtype: mysqli
+        shell: bash
+        run: |
+          set +e
+          : > lifecycle-phpunit.log
+          overall=0
+          tests=(
+            public/local/digieramedia/tests/lifecycle_service_test.php
+            public/local/digieramedia/tests/usage_service_test.php
+            public/filter/digieramedia/tests/text_filter_lifecycle_test.php
+          )
+          for testfile in "${tests[@]}"; do
+            echo "===== $testfile =====" | tee -a lifecycle-phpunit.log
+            vendor/bin/phpunit --display-errors --display-warnings "$testfile" 2>&1 | tee -a lifecycle-phpunit.log
+            rc=${PIPESTATUS[0]}
+            echo "TEST_EXIT_CODE=$rc $testfile" | tee -a lifecycle-phpunit.log
+            if [[ "$rc" -ne 0 ]]; then overall=1; fi
+          done
+          echo "OVERALL_EXIT_CODE=$overall" | tee -a lifecycle-phpunit.log
+          exit 0
+
+      - name: Upload PHPUnit diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: DIGIERA_MEDIA_LIFECYCLE_PHPUNIT
+          path: lifecycle-phpunit.log
+          if-no-files-found: error
+          retention-days: 2
