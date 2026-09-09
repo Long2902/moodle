@@ -20,6 +20,10 @@ on:
       - '.github/workflows/digiera-media-rc1.yml'
   workflow_dispatch:
 
+concurrency:
+  group: digiera-media-rc1-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
