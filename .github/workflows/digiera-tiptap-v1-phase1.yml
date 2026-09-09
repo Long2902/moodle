@@ -108,13 +108,24 @@ jobs:
           sha256sum ../amd/build/native_editor.min.js | tee /tmp/build2.sha
           echo DETERMINISTIC_TIPTAP_BUILD=PASS
 
-      - name: Verify accepted lock hash
+      - name: Verify accepted hashes
         run: |
           set -euo pipefail
-          ACTUAL=$(sha256sum public/local/digieranative/client/package-lock.json | awk '{print $1}')
-          echo PACKAGE_LOCK_SHA256=$ACTUAL
-          test "$ACTUAL" = "bd28c54a123ae1da0895c60dcc34db8710732e00cb8dffc9c6280810aab7b473"
-          echo PACKAGE_LOCK_ACCEPTED_HASH=PASS
+          LOCK=$(sha256sum public/local/digieranative/client/package-lock.json | awk '{print $1}')
+          AMD=$(sha256sum public/local/digieranative/amd/build/native_editor.min.js | awk '{print $1}')
+          echo PACKAGE_LOCK_SHA256=$LOCK
+          echo NATIVE_AMD_SHA256=$AMD
+          test "$LOCK" = "bd28c54a123ae1da0895c60dcc34db8710732e00cb8dffc9c6280810aab7b473"
+          test "$AMD" = "448f5386ae4213ecf0695c6a7591a3578a90b1c05db748b89e507fff9c7528f7"
+          echo ACCEPTED_PRODUCT_HASHES=PASS
+
+      - name: Remove build-only dependencies
+        run: |
+          set -euo pipefail
+          test -d public/local/digieranative/client/node_modules
+          rm -rf public/local/digieranative/client/node_modules
+          test ! -e public/local/digieranative/client/node_modules
+          echo BUILD_ONLY_DEPENDENCIES_REMOVED=PASS
 
       - name: Stage product source
         run: |
