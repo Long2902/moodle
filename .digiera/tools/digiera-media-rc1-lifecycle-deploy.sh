@@ -5,7 +5,7 @@ umask 022
 WEB02="${WEB02:-10.0.10.12}"
 MOODLE="${MOODLE:-/var/www/moodle/public}"
 MOODLE_USER="${MOODLE_USER:-www-data}"
-REF="a7284b8196b2e2d0805a829a350b72341df5c3dd"
+REF="b2acc33e36984dda5d8b6232af44884fa11304b6"
 RAW="https://raw.githubusercontent.com/Long2902/moodle/$REF/public"
 TS="$(date +%Y%m%d-%H%M%S)"
 TMP="/var/tmp/DIGIERA_MEDIA_LIFECYCLE_$TS"
@@ -110,6 +110,8 @@ grep -Fq 'local_digieramedia_purge_media' "$TMP/local/digieramedia/db/services.p
 grep -Fq 'function delete_object' "$TMP/local/digieramedia/classes/r2/sigv4_client.php"
 grep -Fq 'DELETE' "$TMP/local/digieramedia/classes/r2/sigv4_client.php"
 ! grep -Fq 'delete is outside' "$TMP/local/digieramedia/classes/r2/sigv4_client.php"
+! grep -Fq '\runtime_exception' "$TMP/local/digieramedia/classes/r2/sigv4_client.php"
+grep -Fq '\RuntimeException' "$TMP/local/digieramedia/classes/r2/sigv4_client.php"
 grep -Fq "['ACTIVE', 'TRASHED']" "$TMP/filter/digieramedia/classes/text_filter.php"
 
 grep -Fq 'local_digieramedia_get_media_usage' \
