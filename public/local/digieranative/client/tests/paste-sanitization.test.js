@@ -33,7 +33,7 @@ describe('DIGIERA Native paste sanitization', () => {
         });
 
         expect(
-            typeof view.props.handlePaste,
+            typeof view.view.props.handlePaste,
             'editor must install sanitized paste handler',
         ).toBe('function');
 
@@ -79,8 +79,8 @@ describe('DIGIERA Native paste sanitization', () => {
         };
 
         const applied =
-            view.props.handlePaste(
-                view,
+            view.view.props.handlePaste(
+                view.view,
                 event,
             );
 
