@@ -15,4 +15,6 @@ export {
     fromNativeDocument,
     toNativeDocument,
 } from './document_adapter.js';
+
 export {createAutosaveController} from './autosave.js';
+export {renderPreview} from './preview_renderer.js';
