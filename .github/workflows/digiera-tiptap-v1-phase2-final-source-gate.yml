@@ -114,7 +114,7 @@ jobs:
           styles = Path('public/local/worksheetlibrary/styles.css').read_text(encoding='utf-8')
           ribbon = Path('public/local/digieranative/client/src/ribbon.js').read_text(encoding='utf-8')
           required_index = [
-              "class'=>'wslib-grid'",
+              "start_div('wslib-grid')",
               "class'=>'wslib-folders'",
               "class'=>'wslib-results'",
               "class'=>'wslib-detail'",
