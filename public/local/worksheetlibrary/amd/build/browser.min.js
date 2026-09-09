@@ -97,8 +97,9 @@ define([], function() {
 
         document.querySelector('[data-publish-form]')?.addEventListener('submit', event => {
             const itemid = event.currentTarget.dataset.itemid || '';
+            const versionid = event.currentTarget.dataset.versionid || '';
             try {
-                sessionStorage.setItem('wslib-published-item', itemid);
+                sessionStorage.setItem('wslib-publish-pending', `${itemid}:${versionid}`);
             } catch (error) {
                 // Storage can be unavailable in hardened browsers; publish itself must still proceed.
             }
@@ -107,10 +108,16 @@ define([], function() {
         const detailRoot = document.querySelector('[data-wslib-itemid]');
         if (detailRoot) {
             try {
-                const published = sessionStorage.getItem('wslib-published-item');
-                if (published && published === detailRoot.dataset.wslibItemid) {
-                    sessionStorage.removeItem('wslib-published-item');
-                    openModal('publish-success');
+                const pending = sessionStorage.getItem('wslib-publish-pending');
+                const published = new Set((detailRoot.dataset.publishedVersions || '').split(',').filter(Boolean));
+                if (pending) {
+                    const [itemid, versionid] = pending.split(':');
+                    if (itemid === detailRoot.dataset.wslibItemid && published.has(versionid)) {
+                        sessionStorage.removeItem('wslib-publish-pending');
+                        openModal('publish-success');
+                    } else if (itemid === detailRoot.dataset.wslibItemid) {
+                        sessionStorage.removeItem('wslib-publish-pending');
+                    }
                 }
             } catch (error) {
                 // Ignore storage failures; the published state is still visible in the version inspector.
