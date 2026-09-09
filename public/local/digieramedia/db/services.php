@@ -19,6 +19,14 @@ $functions = [
         'ajax' => true,
         'loginrequired' => true,
     ],
+    'local_digieramedia_update_reference_version' => [
+        'classname' => 'local_digieramedia\\external\\update_reference_version',
+        'methodname' => 'execute',
+        'description' => 'Update the saved version mode of one existing DIGIERA reference.',
+        'type' => 'write',
+        'ajax' => true,
+        'loginrequired' => true,
+    ],
     'local_digieramedia_resolve_references' => [
         'classname' => 'local_digieramedia\\external\\resolve_references',
         'methodname' => 'execute',
