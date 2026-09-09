@@ -76,6 +76,10 @@ jobs:
           grep -q '_exports.open' public/lib/editor/tiny/plugins/digieramedia/amd/build/ui.min.js
           grep -q 'local_digieramedia_create_upload_session' public/lib/editor/tiny/plugins/digieramedia/amd/build/upload_client.min.js
           grep -q 'local_digieramedia_update_reference_version' public/lib/editor/tiny/plugins/digieramedia/amd/build/ui.min.js
+          grep -q 'local_digieramedia_get_media_usage' public/lib/editor/tiny/plugins/digieramedia/amd/build/ui.min.js
+          grep -q 'local_digieramedia_trash_media' public/lib/editor/tiny/plugins/digieramedia/amd/build/ui.min.js
+          grep -q 'local_digieramedia_restore_media' public/lib/editor/tiny/plugins/digieramedia/amd/build/ui.min.js
+          grep -q 'local_digieramedia_purge_media' public/lib/editor/tiny/plugins/digieramedia/amd/build/ui.min.js
           grep -q 'getSelectedReference' public/lib/editor/tiny/plugins/digieramedia/amd/build/reference_component.min.js
       - name: Commit generated TinyMCE AMD runtime
         if: github.ref_name == 'feature/digiera-media-v1-rc1-versioning' || github.ref_name == 'feature/digiera-media-v1-rc1-lifecycle'
@@ -121,6 +125,7 @@ jobs:
             public/local/digieramedia/tests/lifecycle_service_test.php
             public/local/digieramedia/tests/usage_service_test.php
             public/filter/digieramedia/tests/text_filter_test.php
+            public/filter/digieramedia/tests/text_filter_lifecycle_test.php
           )
           for testfile in "${tests[@]}"; do
             if test -f "$testfile"; then
