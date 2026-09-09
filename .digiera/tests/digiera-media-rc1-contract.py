@@ -216,6 +216,13 @@ def test_reference_version_state_reopens_and_updates_existing_reference():
     assert 'getSelectedReference' in component_build
     assert 'local_digieramedia_update_reference_version' in ui_build
 
+def test_moodle_upgrade_entrypoint_is_global():
+    upgrade = read('public/local/digieramedia/db/upgrade.php')
+    assert re.search(r'(?m)^\s*namespace\s+', upgrade) is None, (
+        'Moodle db/upgrade.php must not namespace xmldb_local_digieramedia_upgrade'
+    )
+    assert re.search(r'function\s+xmldb_local_digieramedia_upgrade\s*\(', upgrade)
+
 if __name__ == '__main__':
     tests = [value for name, value in sorted(globals().items()) if name.startswith('test_') and callable(value)]
     for test in tests:
