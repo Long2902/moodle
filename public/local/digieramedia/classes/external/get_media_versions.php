@@ -39,7 +39,11 @@ final class get_media_versions extends external_api {
             );
         }
 
-        [$statussql, $statusparams] = $DB->get_in_or_equal(['ACTIVE', 'TRASHED'], SQL_PARAMS_NAMED, 'mediastatus');
+        [$statussql, $statusparams] = $DB->get_in_or_equal(
+            ['ACTIVE', 'TRASHED', 'PURGING'],
+            SQL_PARAMS_NAMED,
+            'mediastatus'
+        );
         $statusparams['mediauuid'] = $params['mediauuid'];
         $media = $DB->get_record_sql(
             "SELECT *
