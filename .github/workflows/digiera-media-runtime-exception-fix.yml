@@ -1,0 +1,65 @@
+name: DIGIERA Media RuntimeException fix
+
+on:
+  push:
+    branches:
+      - feature/digiera-media-v1-rc1-lifecycle
+    paths:
+      - '.github/workflows/digiera-media-runtime-exception-fix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix-runtime-exception:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout lifecycle branch
+        uses: actions/checkout@v4
+
+      - name: Replace invalid runtime_exception references
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          paths = [
+              Path('public/local/digieramedia/classes/r2/sigv4_client.php'),
+              Path('public/local/digieramedia/tests/lifecycle_service_test.php'),
+          ]
+          changed = 0
+          for path in paths:
+              text = path.read_text()
+              count = text.count('\\runtime_exception')
+              if count:
+                  text = text.replace('\\runtime_exception', '\\RuntimeException')
+                  path.write_text(text)
+                  changed += count
+                  print(f'FIXED={count} {path}')
+          if changed < 2:
+              raise SystemExit(f'expected runtime_exception references, fixed={changed}')
+          for path in paths:
+              if '\\runtime_exception' in path.read_text():
+                  raise SystemExit(f'lowercase runtime_exception remains: {path}')
+          print(f'RUNTIME_EXCEPTION_FIX_COUNT={changed}')
+          PY
+
+          php -l public/local/digieramedia/classes/r2/sigv4_client.php
+          php -l public/local/digieramedia/tests/lifecycle_service_test.php
+          echo 'RUNTIME_EXCEPTION_SOURCE_FIX=PASS'
+
+      - name: Commit product fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'DIGIERA CI'
+          git config user.email '84571199+Long2902@users.noreply.github.com'
+          git add \
+            public/local/digieramedia/classes/r2/sigv4_client.php \
+            public/local/digieramedia/tests/lifecycle_service_test.php
+          git commit -m 'fix: use PHP RuntimeException in R2 failure paths'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          echo 'RUNTIME_EXCEPTION_FIX_COMMIT=PASS'
