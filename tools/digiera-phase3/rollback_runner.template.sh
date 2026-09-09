@@ -15,9 +15,12 @@ die() { say "ERROR: $*" >&2; exit 1; }
 MODE="rollback"
 WORKDIR="$(pwd)"
 if [ "${1:-}" = "--self-check" ]; then
-    test "$BOUND_SOURCE_SHA" != "__SOURCE_SHA__"
-    test "$BOUND_PACKAGE_SHA" != "__PACKAGE_SHA__"
-    test "$BOUND_MANIFEST_SHA" != "__MANIFEST_SHA__"
+    test "${#BOUND_SOURCE_SHA}" -eq 40
+    test "${#BOUND_PACKAGE_SHA}" -eq 64
+    test "${#BOUND_MANIFEST_SHA}" -eq 64
+    case "$BOUND_SOURCE_SHA$BOUND_PACKAGE_SHA$BOUND_MANIFEST_SHA" in
+        *"__"*) exit 1 ;;
+    esac
     say "ROLLBACK_RUNNER_BINDING=PASS"
     exit 0
 elif [ "${1:-}" = "--auto" ]; then
