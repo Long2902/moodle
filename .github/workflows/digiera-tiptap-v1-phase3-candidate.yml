@@ -1,0 +1,303 @@
+name: DIGIERA Tiptap V1 Phase3 Candidate
+
+on:
+  push:
+    branches:
+      - digiera/tiptap-v1-phase3-candidate
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: digiera-tiptap-v1-phase3-candidate
+  cancel-in-progress: true
+
+env:
+  SOURCE_SHA: 4d90ebdf297e8e1b1b43051e046d42fa904b53da
+  MATERIALIZATION_BASE_SHA: 4c88493463c403e116a622f0754a9e71b4733a47
+  ACCEPTED_LOCK_SHA256: bd28c54a123ae1da0895c60dcc34db8710732e00cb8dffc9c6280810aab7b473
+  ACCEPTED_AMD_SHA256: 448f5386ae4213ecf0695c6a7591a3578a90b1c05db748b89e507fff9c7528f7
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout isolated packaging branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Fetch exact canonical source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git fetch --no-tags --depth=2 origin digiera/preview-v01
+          git cat-file -e "$SOURCE_SHA^{commit}"
+          git cat-file -e "$MATERIALIZATION_BASE_SHA^{commit}"
+          test "$(git rev-parse origin/digiera/preview-v01)" = "$SOURCE_SHA"
+          echo CANONICAL_SOURCE_RESOLVED=PASS
+
+      - name: Prove packaging branch did not mutate product
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git diff --exit-code "$SOURCE_SHA" HEAD -- \
+            public/local/digieranative \
+            public/local/worksheetlibrary \
+            public/mod/worksheetgrader
+          CHANGED=$(git diff --name-only "$SOURCE_SHA" HEAD)
+          BAD=$(printf '%s\n' "$CHANGED" | grep -Ev '^(.github/workflows/digiera-tiptap-v1-phase3-candidate.yml|tools/digiera-phase3/[^/]+)$' || true)
+          test -z "$BAD"
+          echo PHASE3_PRODUCT_SOURCE_IMMUTABLE=PASS
+
+      - name: Build deterministic three-plugin candidate twice
+        id: package
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OUT="$GITHUB_WORKSPACE/phase3-out"
+          mkdir -p "$OUT"
+          SHORT="${SOURCE_SHA:0:12}"
+          PACKAGE_FILE="digiera-tiptap-ui-v1-${SHORT}.tar.gz"
+          PACKAGE2="/tmp/${PACKAGE_FILE}.second"
+          MANIFEST_FILE="digiera-tiptap-ui-v1-${SHORT}.manifest.txt"
+          ARTIFACT_NAME="digiera-tiptap-v1-phase3-${SHORT}"
+
+          build_package() {
+            local target="$1"
+            git archive --format=tar "$SOURCE_SHA" \
+              public/local/digieranative \
+              public/local/worksheetlibrary \
+              public/mod/worksheetgrader \
+              | gzip -n > "$target"
+          }
+
+          build_package "$OUT/$PACKAGE_FILE"
+          build_package "$PACKAGE2"
+          cmp "$OUT/$PACKAGE_FILE" "$PACKAGE2"
+          rm -f "$PACKAGE2"
+
+          echo "package_file=$PACKAGE_FILE" >> "$GITHUB_OUTPUT"
+          echo "manifest_file=$MANIFEST_FILE" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+          echo DETERMINISTIC_CANDIDATE_ARCHIVE=PASS
+
+      - name: Validate candidate archive paths and extract
+        shell: bash
+        env:
+          PACKAGE_FILE: ${{ steps.package.outputs.package_file }}
+        run: |
+          set -Eeuo pipefail
+          OUT="$GITHUB_WORKSPACE/phase3-out"
+          STAGE="$GITHUB_WORKSPACE/phase3-stage"
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE"
+          python3 - "$OUT/$PACKAGE_FILE" <<'PY'
+          import sys, tarfile
+          p = sys.argv[1]
+          allowed = (
+              'public/local/digieranative',
+              'public/local/worksheetlibrary',
+              'public/mod/worksheetgrader',
+          )
+          with tarfile.open(p, 'r:gz') as tf:
+              members = tf.getmembers()
+              assert members, 'empty archive'
+              for m in members:
+                  name = m.name.rstrip('/')
+                  assert not name.startswith('/'), f'absolute path: {m.name}'
+                  assert '..' not in name.split('/'), f'path traversal: {m.name}'
+                  assert not (m.issym() or m.islnk()), f'link not allowed: {m.name}'
+                  assert any(name == root or name.startswith(root + '/') for root in allowed), f'outside approved roots: {m.name}'
+          print('CANDIDATE_PATH_SCOPE=PASS')
+          print('CANDIDATE_LINK_SAFETY=PASS')
+          PY
+          tar -xzf "$OUT/$PACKAGE_FILE" -C "$STAGE"
+          test ! -e "$STAGE/public/local/digieraoffice"
+          test ! -e "$STAGE/public/theme/remui"
+          test ! -e "$STAGE/theme/remui"
+          echo THREE_PLUGIN_PAYLOAD_ONLY=PASS
+
+      - name: Generate immutable manifest
+        id: manifest
+        shell: bash
+        env:
+          PACKAGE_FILE: ${{ steps.package.outputs.package_file }}
+          MANIFEST_FILE: ${{ steps.package.outputs.manifest_file }}
+        run: |
+          set -Eeuo pipefail
+          OUT="$GITHUB_WORKSPACE/phase3-out"
+          STAGE="$GITHUB_WORKSPACE/phase3-stage"
+          tree_hash() {
+            (cd "$1"; find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}')
+          }
+          PACKAGE_SHA=$(sha256sum "$OUT/$PACKAGE_FILE" | awk '{print $1}')
+          FILE_COUNT=$(tar -tzf "$OUT/$PACKAGE_FILE" | sed '/\/$/d' | wc -l | tr -d ' ')
+          DN=$(tree_hash "$STAGE/public/local/digieranative")
+          WL=$(tree_hash "$STAGE/public/local/worksheetlibrary")
+          WG=$(tree_hash "$STAGE/public/mod/worksheetgrader")
+          AMD=$(sha256sum "$STAGE/public/local/digieranative/amd/build/native_editor.min.js" | awk '{print $1}')
+          LOCK=$(sha256sum "$STAGE/public/local/digieranative/client/package-lock.json" | awk '{print $1}')
+          test "$AMD" = "$ACCEPTED_AMD_SHA256"
+          test "$LOCK" = "$ACCEPTED_LOCK_SHA256"
+
+          cat > "$OUT/$MANIFEST_FILE" <<EOF
+          SOURCE_COMMIT_SHA=$SOURCE_SHA
+          PACKAGE_FILE=$PACKAGE_FILE
+          PACKAGE_SHA256=$PACKAGE_SHA
+          FILE_COUNT=$FILE_COUNT
+          TREE_HASH_DIGIERANATIVE=$DN
+          TREE_HASH_WORKSHEETLIBRARY=$WL
+          TREE_HASH_WORKSHEETGRADER=$WG
+          NATIVE_AMD_SHA256=$AMD
+          PACKAGE_LOCK_SHA256=$LOCK
+          PRODUCT_ROOT_1=public/local/digieranative
+          PRODUCT_ROOT_2=public/local/worksheetlibrary
+          PRODUCT_ROOT_3=public/mod/worksheetgrader
+          DB_UPGRADE_REQUIRED=NO
+          EOF
+          sed -i 's/^          //' "$OUT/$MANIFEST_FILE"
+          MANIFEST_SHA=$(sha256sum "$OUT/$MANIFEST_FILE" | awk '{print $1}')
+          echo "package_sha=$PACKAGE_SHA" >> "$GITHUB_OUTPUT"
+          echo "manifest_sha=$MANIFEST_SHA" >> "$GITHUB_OUTPUT"
+          echo "file_count=$FILE_COUNT" >> "$GITHUB_OUTPUT"
+          echo "dn=$DN" >> "$GITHUB_OUTPUT"
+          echo "wl=$WL" >> "$GITHUB_OUTPUT"
+          echo "wg=$WG" >> "$GITHUB_OUTPUT"
+          echo CANDIDATE_MANIFEST=PASS
+
+      - name: Prove no DB upgrade in candidate delta
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          CHANGED=$(git diff --name-only "$MATERIALIZATION_BASE_SHA" "$SOURCE_SHA")
+          DBDELTA=$(printf '%s\n' "$CHANGED" | grep -E '(^|/)(version\.php|db/install\.xml|db/upgrade\.php)$' || true)
+          test -z "$DBDELTA"
+          echo DB_UPGRADE_REQUIRED=NO
+
+      - name: Render package-bound deploy and rollback runners
+        shell: bash
+        env:
+          PACKAGE_FILE: ${{ steps.package.outputs.package_file }}
+          MANIFEST_FILE: ${{ steps.package.outputs.manifest_file }}
+          PACKAGE_SHA: ${{ steps.manifest.outputs.package_sha }}
+          MANIFEST_SHA: ${{ steps.manifest.outputs.manifest_sha }}
+        run: |
+          set -Eeuo pipefail
+          OUT="$GITHUB_WORKSPACE/phase3-out"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          values = {
+              '__SOURCE_SHA__': os.environ['SOURCE_SHA'],
+              '__PACKAGE_SHA__': os.environ['PACKAGE_SHA'],
+              '__MANIFEST_SHA__': os.environ['MANIFEST_SHA'],
+              '__PACKAGE_FILE__': os.environ['PACKAGE_FILE'],
+              '__MANIFEST_FILE__': os.environ['MANIFEST_FILE'],
+          }
+          pairs = [
+              ('tools/digiera-phase3/deploy_runner.template.sh', 'phase3-out/deploy.sh'),
+              ('tools/digiera-phase3/rollback_runner.template.sh', 'phase3-out/rollback.sh'),
+          ]
+          for src, dst in pairs:
+              text = Path(src).read_text(encoding='utf-8')
+              for old, new in values.items():
+                  text = text.replace(old, new)
+              if '__' in text:
+                  raise SystemExit(f'unresolved template marker in {dst}')
+              Path(dst).write_text(text, encoding='utf-8')
+          PY
+          chmod +x "$OUT/deploy.sh" "$OUT/rollback.sh"
+          echo PACKAGE_BOUND_RUNNERS_RENDERED=PASS
+
+      - name: Verify runner syntax binding and safety contracts
+        shell: bash
+        env:
+          PACKAGE_FILE: ${{ steps.package.outputs.package_file }}
+          MANIFEST_FILE: ${{ steps.package.outputs.manifest_file }}
+          PACKAGE_SHA: ${{ steps.manifest.outputs.package_sha }}
+          MANIFEST_SHA: ${{ steps.manifest.outputs.manifest_sha }}
+        run: |
+          set -Eeuo pipefail
+          OUT="$GITHUB_WORKSPACE/phase3-out"
+          bash -n "$OUT/deploy.sh"
+          bash -n "$OUT/rollback.sh"
+          ! grep -R -E 'admin/cli/upgrade\.php|(^|[^[:alnum:]_])(mysql|psql)([^[:alnum:]_]|$)' "$OUT/deploy.sh" "$OUT/rollback.sh"
+          grep -q 'vm-c47e0dd9' "$OUT/deploy.sh"
+          grep -q '10.0.10.12' "$OUT/deploy.sh"
+          grep -q '/var/www/moodle/public' "$OUT/deploy.sh"
+          grep -q 'moodle-cron.timer' "$OUT/deploy.sh"
+          grep -q 'admin/cli/maintenance.php' "$OUT/deploy.sh"
+          grep -q 'PREDEPLOY BACKUP' "$OUT/deploy.sh"
+          grep -q 'rsync -a --delete' "$OUT/deploy.sh"
+          grep -q 'AUTO_ROLLBACK=START' "$OUT/deploy.sh"
+          grep -q "$SOURCE_SHA" "$OUT/deploy.sh"
+          grep -q "$PACKAGE_SHA" "$OUT/deploy.sh"
+          grep -q "$MANIFEST_SHA" "$OUT/deploy.sh"
+          grep -q "$SOURCE_SHA" "$OUT/rollback.sh"
+          grep -q "$PACKAGE_SHA" "$OUT/rollback.sh"
+          grep -q "$MANIFEST_SHA" "$OUT/rollback.sh"
+          "$OUT/deploy.sh" --verify-package-only "$OUT"
+          "$OUT/rollback.sh" --self-check "$OUT"
+          echo DEPLOY_RUNNER_STATIC_CONTRACT=PASS
+          echo ROLLBACK_RUNNER_STATIC_CONTRACT=PASS
+
+      - name: Write Phase 3 evidence summary
+        shell: bash
+        env:
+          PACKAGE_FILE: ${{ steps.package.outputs.package_file }}
+          MANIFEST_FILE: ${{ steps.package.outputs.manifest_file }}
+          ARTIFACT_NAME: ${{ steps.package.outputs.artifact_name }}
+          PACKAGE_SHA: ${{ steps.manifest.outputs.package_sha }}
+          MANIFEST_SHA: ${{ steps.manifest.outputs.manifest_sha }}
+          FILE_COUNT: ${{ steps.manifest.outputs.file_count }}
+          DN: ${{ steps.manifest.outputs.dn }}
+          WL: ${{ steps.manifest.outputs.wl }}
+          WG: ${{ steps.manifest.outputs.wg }}
+        run: |
+          set -Eeuo pipefail
+          OUT="$GITHUB_WORKSPACE/phase3-out"
+          cat > "$OUT/PHASE3_SUMMARY.txt" <<EOF
+          SOURCE_COMMIT_SHA=$SOURCE_SHA
+          GITHUB_RUN_ID=$GITHUB_RUN_ID
+          ARTIFACT_NAME=$ARTIFACT_NAME
+          PACKAGE_FILE=$PACKAGE_FILE
+          PACKAGE_SHA256=$PACKAGE_SHA
+          MANIFEST_FILE=$MANIFEST_FILE
+          MANIFEST_SHA256=$MANIFEST_SHA
+          FILE_COUNT=$FILE_COUNT
+          TREE_HASH_DIGIERANATIVE=$DN
+          TREE_HASH_WORKSHEETLIBRARY=$WL
+          TREE_HASH_WORKSHEETGRADER=$WG
+          NATIVE_AMD_SHA256=$ACCEPTED_AMD_SHA256
+          PACKAGE_LOCK_SHA256=$ACCEPTED_LOCK_SHA256
+          DB_UPGRADE_REQUIRED=NO
+          PRODUCTION_CANDIDATE_PACKAGE=PASS
+          DEPLOY_RUNNER_READY=PASS
+          EOF
+          sed -i 's/^          //' "$OUT/PHASE3_SUMMARY.txt"
+          cat "$OUT/PHASE3_SUMMARY.txt"
+
+      - name: Upload immutable Phase 3 bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.artifact_name }}
+          path: |
+            phase3-out/${{ steps.package.outputs.package_file }}
+            phase3-out/${{ steps.package.outputs.manifest_file }}
+            phase3-out/deploy.sh
+            phase3-out/rollback.sh
+            phase3-out/PHASE3_SUMMARY.txt
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Final Phase 3 verdict
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo PRODUCTION_CANDIDATE_PACKAGE=PASS
+          echo DEPLOY_RUNNER_READY=PASS
+          echo PHASE3=PASS
