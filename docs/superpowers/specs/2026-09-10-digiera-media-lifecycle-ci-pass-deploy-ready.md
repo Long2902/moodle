@@ -7,7 +7,7 @@ Status: **VERIFIED IN CI, NOT YET DEPLOYED TO WEB01/WEB02**
 ## Frozen revisions
 
 - Lifecycle product commit: `b2acc33e36984dda5d8b6232af44884fa11304b6`
-- Deploy-helper branch head before this checkpoint: `e875b1aa76a9890b7fe90d02d48e9ead2635503e`
+- Deploy-helper commit: `e875b1aa76a9890b7fe90d02d48e9ead2635503e`
 - Helper: `.digiera/tools/digiera-media-rc1-lifecycle-deploy.sh`
 - Helper pins `REF=b2acc33e36984dda5d8b6232af44884fa11304b6`
 - Expected versions:
@@ -81,14 +81,14 @@ NEXT=CTRL_F5_THEN_SMOKE_USAGE_TRASH_RESTORE_PURGE_WITH_DISPOSABLE_MEDIA
 
 ## Next action — production deployment
 
-Run on Web01 as root:
+Run on Web01 as root. The helper itself is fetched from the exact verified commit, not from a moving branch ref:
 
 ```bash
 set -Eeuo pipefail
 
 cd /root
 curl -fsSL \
-  https://raw.githubusercontent.com/Long2902/moodle/feature/digiera-media-v1-rc1-lifecycle/.digiera/tools/digiera-media-rc1-lifecycle-deploy.sh \
+  https://raw.githubusercontent.com/Long2902/moodle/e875b1aa76a9890b7fe90d02d48e9ead2635503e/.digiera/tools/digiera-media-rc1-lifecycle-deploy.sh \
   -o /root/digiera-media-rc1-lifecycle-deploy.sh
 
 chmod 0700 /root/digiera-media-rc1-lifecycle-deploy.sh
