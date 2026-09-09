@@ -51,17 +51,21 @@ final class search_media extends external_api {
         $sqlparams['mediastatus'] = $tab === 'trash' ? 'TRASHED' : 'ACTIVE';
 
         if (!$canviewall) {
-            $scope = [
-                'm.owneruserid = :owneruserid',
-                "m.visibility = 'GLOBAL'",
-                "m.visibility = 'SHARED'",
-            ];
             $sqlparams['owneruserid'] = (int)$USER->id;
-            if ($courseid > 0) {
-                $scope[] = "(m.visibility = 'COURSE' AND m.origincourseid = :courseid)";
-                $sqlparams['courseid'] = $courseid;
+            if ($tab === 'trash') {
+                $where[] = 'm.owneruserid = :owneruserid';
+            } else {
+                $scope = [
+                    'm.owneruserid = :owneruserid',
+                    "m.visibility = 'GLOBAL'",
+                    "m.visibility = 'SHARED'",
+                ];
+                if ($courseid > 0) {
+                    $scope[] = "(m.visibility = 'COURSE' AND m.origincourseid = :courseid)";
+                    $sqlparams['courseid'] = $courseid;
+                }
+                $where[] = '(' . implode(' OR ', $scope) . ')';
             }
-            $where[] = '(' . implode(' OR ', $scope) . ')';
         }
 
         if ($query !== '') {
@@ -107,6 +111,11 @@ final class search_media extends external_api {
             'canupload' => has_capability('local/digieramedia:upload', $context),
             'canreplace' => has_capability('local/digieramedia:replace', $context),
             'canmanageversions' => has_capability('local/digieramedia:manageversions', $context),
+            'canviewusage' => has_capability('local/digieramedia:viewusage', $context),
+            'cantrash' => has_capability('local/digieramedia:trashown', $context)
+                || has_capability('local/digieramedia:trash', $context),
+            'canrestore' => has_capability('local/digieramedia:restore', $context),
+            'canpurge' => has_capability('local/digieramedia:purge', $context),
         ];
     }
 
@@ -129,6 +138,10 @@ final class search_media extends external_api {
             'canupload' => new external_value(PARAM_BOOL, 'Upload capability'),
             'canreplace' => new external_value(PARAM_BOOL, 'Replace capability'),
             'canmanageversions' => new external_value(PARAM_BOOL, 'Version-management capability'),
+            'canviewusage' => new external_value(PARAM_BOOL, 'Usage-view capability'),
+            'cantrash' => new external_value(PARAM_BOOL, 'Trash capability summary'),
+            'canrestore' => new external_value(PARAM_BOOL, 'Restore capability summary'),
+            'canpurge' => new external_value(PARAM_BOOL, 'Permanent-purge capability summary'),
         ]);
     }
 }
