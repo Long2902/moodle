@@ -1,0 +1,227 @@
+name: DIGIERA Phase5 Package
+
+on:
+  push:
+    branches:
+      - digiera/tiptap-v1-phase5-package
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SOURCE_SHA: 3413597dd78b0cef6fbb1b5be59ac5b1ffe18504
+  PREVIOUS_PROD_SHA: 4d90ebdf297e8e1b1b43051e046d42fa904b53da
+  RUNNER_SHA: 5cbe44a1d9e935dafb674ec81367bb1342570c71
+  ACCEPTED_LOCK_SHA256: bd28c54a123ae1da0895c60dcc34db8710732e00cb8dffc9c6280810aab7b473
+  ACCEPTED_AMD_SHA256: 448f5386ae4213ecf0695c6a7591a3578a90b1c05db748b89e507fff9c7528f7
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Resolve exact canonical and proven service-user runners
+        run: |
+          set -Eeuo pipefail
+          git fetch --no-tags --depth=2 origin digiera/preview-v01
+          test "$(git rev-parse origin/digiera/preview-v01)" = "$SOURCE_SHA"
+          git fetch --no-tags --depth=1 origin digiera/tiptap-v1-phase3-candidate
+          git cat-file -e "$RUNNER_SHA^{commit}"
+          git diff --exit-code "$SOURCE_SHA" HEAD -- \
+            public/local/digieranative \
+            public/local/worksheetlibrary \
+            public/mod/worksheetgrader
+          echo PHASE5_SOURCE_AND_RUNNERS_RESOLVED=PASS
+
+      - name: Prove no DB upgrade in visual delta
+        run: |
+          set -Eeuo pipefail
+          git fetch --no-tags --depth=2 origin "$PREVIOUS_PROD_SHA"
+          CHANGED=$(git diff --name-only "$PREVIOUS_PROD_SHA" "$SOURCE_SHA")
+          BAD=$(printf '%s\n' "$CHANGED" | grep -Ev '^public/local/worksheetlibrary/' || true)
+          test -z "$BAD"
+          DBDELTA=$(printf '%s\n' "$CHANGED" | grep -E '(^|/)(version\.php|db/install\.xml|db/upgrade\.php)$' || true)
+          test -z "$DBDELTA"
+          echo DB_UPGRADE_REQUIRED=NO
+
+      - name: Build deterministic three-plugin candidate
+        id: package
+        run: |
+          set -Eeuo pipefail
+          OUT="$GITHUB_WORKSPACE/phase5-out"
+          mkdir -p "$OUT"
+          SHORT="${SOURCE_SHA:0:12}"
+          PACKAGE_FILE="digiera-tiptap-ui-v1-phase5-${SHORT}.tar.gz"
+          MANIFEST_FILE="digiera-tiptap-ui-v1-phase5-${SHORT}.manifest.txt"
+          ARTIFACT_NAME="digiera-tiptap-v1-phase5-${SHORT}"
+          build() {
+            git archive --format=tar "$SOURCE_SHA" \
+              public/local/digieranative \
+              public/local/worksheetlibrary \
+              public/mod/worksheetgrader | gzip -n > "$1"
+          }
+          build "$OUT/$PACKAGE_FILE"
+          build /tmp/phase5-second.tar.gz
+          cmp "$OUT/$PACKAGE_FILE" /tmp/phase5-second.tar.gz
+          rm -f /tmp/phase5-second.tar.gz
+          echo "package_file=$PACKAGE_FILE" >> "$GITHUB_OUTPUT"
+          echo "manifest_file=$MANIFEST_FILE" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+          echo PHASE5_DETERMINISTIC_ARCHIVE=PASS
+
+      - name: Validate archive and generate manifest
+        id: manifest
+        env:
+          PACKAGE_FILE: ${{ steps.package.outputs.package_file }}
+          MANIFEST_FILE: ${{ steps.package.outputs.manifest_file }}
+        run: |
+          set -Eeuo pipefail
+          OUT="$GITHUB_WORKSPACE/phase5-out"
+          STAGE="$GITHUB_WORKSPACE/phase5-stage"
+          mkdir -p "$STAGE"
+          python3 - "$OUT/$PACKAGE_FILE" <<'PY'
+          import sys, tarfile
+          roots = ('public/local/digieranative','public/local/worksheetlibrary','public/mod/worksheetgrader')
+          ancestors = {'public','public/local','public/mod'}
+          with tarfile.open(sys.argv[1], 'r:gz') as tf:
+              members = tf.getmembers()
+              assert members
+              for m in members:
+                  n = m.name.rstrip('/')
+                  assert not n.startswith('/') and '..' not in n.split('/'), m.name
+                  assert not (m.issym() or m.islnk()), m.name
+                  if n in ancestors:
+                      assert m.isdir(), m.name
+                      continue
+                  assert any(n == r or n.startswith(r + '/') for r in roots), m.name
+          print('PHASE5_PACKAGE_PATH_SAFETY=PASS')
+          PY
+          tar -xzf "$OUT/$PACKAGE_FILE" -C "$STAGE"
+          tree_hash() { (cd "$1"; find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}'); }
+          PACKAGE_SHA=$(sha256sum "$OUT/$PACKAGE_FILE" | awk '{print $1}')
+          FILE_COUNT=$(tar -tzf "$OUT/$PACKAGE_FILE" | sed '/\/$/d' | wc -l | tr -d ' ')
+          DN=$(tree_hash "$STAGE/public/local/digieranative")
+          WL=$(tree_hash "$STAGE/public/local/worksheetlibrary")
+          WG=$(tree_hash "$STAGE/public/mod/worksheetgrader")
+          AMD=$(sha256sum "$STAGE/public/local/digieranative/amd/build/native_editor.min.js" | awk '{print $1}')
+          LOCK=$(sha256sum "$STAGE/public/local/digieranative/client/package-lock.json" | awk '{print $1}')
+          test "$AMD" = "$ACCEPTED_AMD_SHA256"
+          test "$LOCK" = "$ACCEPTED_LOCK_SHA256"
+          cat > "$OUT/$MANIFEST_FILE" <<EOF
+          SOURCE_COMMIT_SHA=$SOURCE_SHA
+          PACKAGE_FILE=$PACKAGE_FILE
+          PACKAGE_SHA256=$PACKAGE_SHA
+          FILE_COUNT=$FILE_COUNT
+          TREE_HASH_DIGIERANATIVE=$DN
+          TREE_HASH_WORKSHEETLIBRARY=$WL
+          TREE_HASH_WORKSHEETGRADER=$WG
+          NATIVE_AMD_SHA256=$AMD
+          PACKAGE_LOCK_SHA256=$LOCK
+          PRODUCT_ROOT_1=public/local/digieranative
+          PRODUCT_ROOT_2=public/local/worksheetlibrary
+          PRODUCT_ROOT_3=public/mod/worksheetgrader
+          DB_UPGRADE_REQUIRED=NO
+          EOF
+          sed -i 's/^          //' "$OUT/$MANIFEST_FILE"
+          MANIFEST_SHA=$(sha256sum "$OUT/$MANIFEST_FILE" | awk '{print $1}')
+          echo "package_sha=$PACKAGE_SHA" >> "$GITHUB_OUTPUT"
+          echo "manifest_sha=$MANIFEST_SHA" >> "$GITHUB_OUTPUT"
+          echo "file_count=$FILE_COUNT" >> "$GITHUB_OUTPUT"
+          echo "dn=$DN" >> "$GITHUB_OUTPUT"
+          echo "wl=$WL" >> "$GITHUB_OUTPUT"
+          echo "wg=$WG" >> "$GITHUB_OUTPUT"
+          echo PHASE5_MANIFEST=PASS
+
+      - name: Render fixed service-user deploy and rollback runners
+        env:
+          PACKAGE_FILE: ${{ steps.package.outputs.package_file }}
+          MANIFEST_FILE: ${{ steps.package.outputs.manifest_file }}
+          PACKAGE_SHA: ${{ steps.manifest.outputs.package_sha }}
+          MANIFEST_SHA: ${{ steps.manifest.outputs.manifest_sha }}
+        run: |
+          set -Eeuo pipefail
+          OUT="$GITHUB_WORKSPACE/phase5-out"
+          git show "$RUNNER_SHA:tools/digiera-phase3/deploy_runner.template.sh" > /tmp/deploy.template.sh
+          git show "$RUNNER_SHA:tools/digiera-phase3/rollback_runner.template.sh" > /tmp/rollback.template.sh
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          vals = {
+              '__SOURCE_SHA__': os.environ['SOURCE_SHA'],
+              '__PACKAGE_SHA__': os.environ['PACKAGE_SHA'],
+              '__MANIFEST_SHA__': os.environ['MANIFEST_SHA'],
+              '__PACKAGE_FILE__': os.environ['PACKAGE_FILE'],
+              '__MANIFEST_FILE__': os.environ['MANIFEST_FILE'],
+          }
+          for src, dst in [('/tmp/deploy.template.sh','phase5-out/deploy.sh'),('/tmp/rollback.template.sh','phase5-out/rollback.sh')]:
+              text = Path(src).read_text()
+              for old, new in vals.items(): text = text.replace(old, new)
+              unresolved = [k for k in vals if k in text]
+              if unresolved: raise SystemExit(f'unresolved={unresolved}')
+              Path(dst).write_text(text)
+          PY
+          chmod +x "$OUT/deploy.sh" "$OUT/rollback.sh"
+          bash -n "$OUT/deploy.sh"
+          bash -n "$OUT/rollback.sh"
+          grep -q 'MOODLE_CLI_USER="www-data"' "$OUT/deploy.sh"
+          grep -q 'runuser -u "$MOODLE_CLI_USER" -- php' "$OUT/deploy.sh"
+          grep -q 'runuser -u "$MOODLE_CLI_USER" -- php' "$OUT/rollback.sh"
+          ! grep -RE 'admin/cli/upgrade\.php|(^|[^[:alnum:]_])(mysql|psql)([^[:alnum:]_]|$)' "$OUT/deploy.sh" "$OUT/rollback.sh"
+          "$OUT/deploy.sh" --verify-package-only "$OUT"
+          "$OUT/rollback.sh" --self-check "$OUT"
+          echo PHASE5_RUNNERS=PASS
+
+      - name: Write Phase5 package summary
+        env:
+          PACKAGE_FILE: ${{ steps.package.outputs.package_file }}
+          MANIFEST_FILE: ${{ steps.package.outputs.manifest_file }}
+          ARTIFACT_NAME: ${{ steps.package.outputs.artifact_name }}
+          PACKAGE_SHA: ${{ steps.manifest.outputs.package_sha }}
+          MANIFEST_SHA: ${{ steps.manifest.outputs.manifest_sha }}
+          FILE_COUNT: ${{ steps.manifest.outputs.file_count }}
+          DN: ${{ steps.manifest.outputs.dn }}
+          WL: ${{ steps.manifest.outputs.wl }}
+          WG: ${{ steps.manifest.outputs.wg }}
+        run: |
+          OUT="$GITHUB_WORKSPACE/phase5-out"
+          cat > "$OUT/PHASE5_PACKAGE_SUMMARY.txt" <<EOF
+          SOURCE_COMMIT_SHA=$SOURCE_SHA
+          GITHUB_RUN_ID=$GITHUB_RUN_ID
+          ARTIFACT_NAME=$ARTIFACT_NAME
+          PACKAGE_FILE=$PACKAGE_FILE
+          PACKAGE_SHA256=$PACKAGE_SHA
+          MANIFEST_FILE=$MANIFEST_FILE
+          MANIFEST_SHA256=$MANIFEST_SHA
+          FILE_COUNT=$FILE_COUNT
+          TREE_HASH_DIGIERANATIVE=$DN
+          TREE_HASH_WORKSHEETLIBRARY=$WL
+          TREE_HASH_WORKSHEETGRADER=$WG
+          DB_UPGRADE_REQUIRED=NO
+          PHASE5_PRODUCTION_CANDIDATE=PASS
+          EOF
+          sed -i 's/^          //' "$OUT/PHASE5_PACKAGE_SUMMARY.txt"
+          cat "$OUT/PHASE5_PACKAGE_SUMMARY.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.artifact_name }}
+          path: |
+            phase5-out/${{ steps.package.outputs.package_file }}
+            phase5-out/${{ steps.package.outputs.manifest_file }}
+            phase5-out/deploy.sh
+            phase5-out/rollback.sh
+            phase5-out/PHASE5_PACKAGE_SUMMARY.txt
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Final Phase5 package verdict
+        run: |
+          echo SOURCE_COMMIT_SHA=$SOURCE_SHA
+          echo DB_UPGRADE_REQUIRED=NO
+          echo PHASE5_PRODUCTION_CANDIDATE=PASS
