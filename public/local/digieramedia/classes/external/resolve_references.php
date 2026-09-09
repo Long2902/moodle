@@ -41,12 +41,18 @@ final class resolve_references extends external_api {
             $seen[$uuid] = true;
 
             $sql = "SELECT r.uuid AS referenceuuid,
+                           r.versionmode,
+                           r.pinnedversionid,
                            m.uuid AS mediauuid,
                            m.name,
                            m.mediatype,
-                           m.status AS mediastatus
+                           m.status AS mediastatus,
+                           m.visibility,
+                           m.timemodified AS modified,
+                           COALESCE(v.filesize, 0) AS size
                       FROM {local_digieramedia_reference} r
                       JOIN {local_digieramedia_media} m ON m.id = r.mediaid
+                 LEFT JOIN {local_digieramedia_version} v ON v.id = m.currentversionid
                      WHERE r.uuid = :uuid
                        AND r.contextid = :contextid";
 
@@ -65,6 +71,11 @@ final class resolve_references extends external_api {
                 'name' => (string)$record->name,
                 'mediatype' => (string)$record->mediatype,
                 'mediastatus' => (string)$record->mediastatus,
+                'versionmode' => (string)$record->versionmode,
+                'pinnedversionid' => (int)$record->pinnedversionid,
+                'visibility' => (string)$record->visibility,
+                'modified' => (int)$record->modified,
+                'size' => (int)$record->size,
             ];
         }
 
@@ -79,6 +90,11 @@ final class resolve_references extends external_api {
                 'name' => new external_value(PARAM_TEXT, 'Media name'),
                 'mediatype' => new external_value(PARAM_ALPHANUMEXT, 'Media type'),
                 'mediastatus' => new external_value(PARAM_ALPHANUMEXT, 'Media status'),
+                'versionmode' => new external_value(PARAM_ALPHANUMEXT, 'Saved reference version mode'),
+                'pinnedversionid' => new external_value(PARAM_INT, 'Saved pinned version id or zero'),
+                'visibility' => new external_value(PARAM_ALPHANUMEXT, 'Media visibility'),
+                'modified' => new external_value(PARAM_INT, 'Media modified time'),
+                'size' => new external_value(PARAM_INT, 'Current version bytes'),
             ])
         );
     }
