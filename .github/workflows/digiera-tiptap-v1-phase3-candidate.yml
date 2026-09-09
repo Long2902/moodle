@@ -102,6 +102,7 @@ jobs:
               'public/local/worksheetlibrary',
               'public/mod/worksheetgrader',
           )
+          ancestor_dirs = {'public', 'public/local', 'public/mod'}
           with tarfile.open(p, 'r:gz') as tf:
               members = tf.getmembers()
               assert members, 'empty archive'
@@ -110,8 +111,12 @@ jobs:
                   assert not name.startswith('/'), f'absolute path: {m.name}'
                   assert '..' not in name.split('/'), f'path traversal: {m.name}'
                   assert not (m.issym() or m.islnk()), f'link not allowed: {m.name}'
+                  if name in ancestor_dirs:
+                      assert m.isdir(), f'ancestor entry must be directory: {m.name}'
+                      continue
                   assert any(name == root or name.startswith(root + '/') for root in allowed), f'outside approved roots: {m.name}'
           print('CANDIDATE_PATH_SCOPE=PASS')
+          print('CANDIDATE_ANCESTOR_DIR_POLICY=PASS')
           print('CANDIDATE_LINK_SAFETY=PASS')
           PY
           tar -xzf "$OUT/$PACKAGE_FILE" -C "$STAGE"
