@@ -206,12 +206,14 @@ jobs:
               ('tools/digiera-phase3/deploy_runner.template.sh', 'phase3-out/deploy.sh'),
               ('tools/digiera-phase3/rollback_runner.template.sh', 'phase3-out/rollback.sh'),
           ]
+          markers = tuple(values)
           for src, dst in pairs:
               text = Path(src).read_text(encoding='utf-8')
               for old, new in values.items():
                   text = text.replace(old, new)
-              if '__' in text:
-                  raise SystemExit(f'unresolved template marker in {dst}')
+              unresolved = [marker for marker in markers if marker in text]
+              if unresolved:
+                  raise SystemExit(f'unresolved template marker(s) {unresolved} in {dst}')
               Path(dst).write_text(text, encoding='utf-8')
           PY
           chmod +x "$OUT/deploy.sh" "$OUT/rollback.sh"
@@ -238,6 +240,9 @@ jobs:
           grep -q 'PREDEPLOY BACKUP' "$OUT/deploy.sh"
           grep -q 'rsync -a --delete' "$OUT/deploy.sh"
           grep -q 'AUTO_ROLLBACK=START' "$OUT/deploy.sh"
+          grep -q 'MOODLE_CLI_USER="www-data"' "$OUT/deploy.sh"
+          grep -q 'runuser -u "$MOODLE_CLI_USER" -- php' "$OUT/deploy.sh"
+          grep -q 'runuser -u "$MOODLE_CLI_USER" -- php' "$OUT/rollback.sh"
           grep -q "$SOURCE_SHA" "$OUT/deploy.sh"
           grep -q "$PACKAGE_SHA" "$OUT/deploy.sh"
           grep -q "$MANIFEST_SHA" "$OUT/deploy.sh"
@@ -246,6 +251,7 @@ jobs:
           grep -q "$MANIFEST_SHA" "$OUT/rollback.sh"
           "$OUT/deploy.sh" --verify-package-only "$OUT"
           "$OUT/rollback.sh" --self-check "$OUT"
+          echo MOODLE_CLI_SERVICE_USER_CONTRACT=PASS
           echo DEPLOY_RUNNER_STATIC_CONTRACT=PASS
           echo ROLLBACK_RUNNER_STATIC_CONTRACT=PASS
 
