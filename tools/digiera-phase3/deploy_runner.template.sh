@@ -9,12 +9,33 @@ MANIFEST_FILE="__MANIFEST_FILE__"
 EXPECTED_HOST="vm-c47e0dd9"
 WEB02_IP="10.0.10.12"
 MOODLE_ROOT="/var/www/moodle/public"
+MOODLE_CLI_USER="www-data"
 STATE_FILE="/root/digiera-tiptap-v1-deploy-state.env"
 
 say() { printf '%s\n' "$*"; }
 die() { say "ERROR: $*" >&2; exit 1; }
 sha256_file() { sha256sum "$1" | awk '{print $1}'; }
 manifest_get() { awk -F= -v key="$1" '$1==key {sub(/^[^=]*=/, ""); print; exit}' "$MANIFEST"; }
+
+moodle_eval_web01() {
+    local code="$1"
+    (cd "$MOODLE_ROOT" && runuser -u "$MOODLE_CLI_USER" -- php -r "$code")
+}
+
+moodle_cli_web01() {
+    (cd "$MOODLE_ROOT" && runuser -u "$MOODLE_CLI_USER" -- php "$@")
+}
+
+moodle_cli_web02() {
+    local script="$1"
+    shift
+    local args=""
+    local arg
+    for arg in "$@"; do
+        printf -v args '%s %q' "$args" "$arg"
+    done
+    ssh -o BatchMode=yes "root@$WEB02_IP" "cd '$MOODLE_ROOT' && runuser -u '$MOODLE_CLI_USER' -- php '$script'$args"
+}
 
 tree_hash() {
     local root="$1"
@@ -92,19 +113,24 @@ fi
 
 [ "${EUID:-$(id -u)}" -eq 0 ] || die "Run as root"
 [ "$(hostname)" = "$EXPECTED_HOST" ] || die "This runner must execute on $EXPECTED_HOST"
-for cmd in php tar rsync sha256sum ssh scp date systemctl awk find sort xargs python3; do
+for cmd in php tar rsync sha256sum ssh scp date systemctl awk find sort xargs python3 runuser; do
     command -v "$cmd" >/dev/null || die "Missing required command: $cmd"
 done
+id "$MOODLE_CLI_USER" >/dev/null 2>&1 || die "Missing Moodle CLI user: $MOODLE_CLI_USER"
 [ -d "$MOODLE_ROOT" ] || die "Missing Moodle root: $MOODLE_ROOT"
 [ -f "$MOODLE_ROOT/config.php" ] || die "Missing Moodle config.php"
-ssh -o BatchMode=yes -o ConnectTimeout=8 "root@$WEB02_IP" "for cmd in php tar rsync sha256sum systemctl find sort xargs; do command -v \"\$cmd\" >/dev/null || exit 127; done; test -d '$MOODLE_ROOT' && test -f '$MOODLE_ROOT/config.php'" || die "Web02 SSH preflight failed"
+ssh -o BatchMode=yes -o ConnectTimeout=8 "root@$WEB02_IP" "for cmd in php tar rsync sha256sum systemctl find sort xargs runuser; do command -v \"\$cmd\" >/dev/null || exit 127; done; id '$MOODLE_CLI_USER' >/dev/null 2>&1; test -d '$MOODLE_ROOT' && test -f '$MOODLE_ROOT/config.php'" || die "Web02 SSH preflight failed"
 
 for rel in local/digieranative local/worksheetlibrary mod/worksheetgrader; do
     [ -d "$MOODLE_ROOT/$rel" ] || die "Missing Web01 plugin dir: $rel"
     ssh -o BatchMode=yes "root@$WEB02_IP" "test -d '$MOODLE_ROOT/$rel'" || die "Missing Web02 plugin dir: $rel"
 done
 
-MAINT_WAS=$(php -r "define('CLI_SCRIPT', true); require '$MOODLE_ROOT/config.php'; echo empty(get_config('core','maintenance_enabled')) ? '0' : '1';")
+moodle_eval_web01 "define('CLI_SCRIPT', true); require '$MOODLE_ROOT/config.php'; echo 'WEB01_MOODLE_CLI=PASS';" | grep -q '^WEB01_MOODLE_CLI=PASS$' || die "Web01 Moodle CLI preflight failed"
+ssh -o BatchMode=yes "root@$WEB02_IP" "cd '$MOODLE_ROOT' && runuser -u '$MOODLE_CLI_USER' -- php -r \"define('CLI_SCRIPT', true); require '$MOODLE_ROOT/config.php'; echo 'WEB02_MOODLE_CLI=PASS';\"" | grep -q '^WEB02_MOODLE_CLI=PASS$' || die "Web02 Moodle CLI preflight failed"
+say "MOODLE_CLI_SERVICE_USER_PREFLIGHT=PASS"
+
+MAINT_WAS=$(moodle_eval_web01 "define('CLI_SCRIPT', true); require '$MOODLE_ROOT/config.php'; echo empty(get_config('core','maintenance_enabled')) ? '0' : '1';")
 if systemctl is-active --quiet moodle-cron.timer; then CRON_WAS="active"; else CRON_WAS="inactive"; fi
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
 BACKUP_WEB01="/root/digiera-tiptap-v1-predeploy-${RUN_ID}-web01.tar.gz"
@@ -123,6 +149,7 @@ write_state() {
         printf 'MANIFEST_FILE=%q\n' "$MANIFEST_FILE"
         printf 'WEB02_IP=%q\n' "$WEB02_IP"
         printf 'MOODLE_ROOT=%q\n' "$MOODLE_ROOT"
+        printf 'MOODLE_CLI_USER=%q\n' "$MOODLE_CLI_USER"
         printf 'RUN_ID=%q\n' "$RUN_ID"
         printf 'BACKUP_WEB01=%q\n' "$BACKUP_WEB01"
         printf 'BACKUP_WEB02=%q\n' "$BACKUP_WEB02"
@@ -134,7 +161,7 @@ write_state() {
 
 cleanup_runtime_state() {
     if [ "$MAINT_WAS" = "0" ]; then
-        php "$MOODLE_ROOT/admin/cli/maintenance.php" --disable >/dev/null 2>&1 || true
+        moodle_cli_web01 "$MOODLE_ROOT/admin/cli/maintenance.php" --disable >/dev/null 2>&1 || true
     fi
     if [ "$CRON_WAS" = "active" ]; then
         systemctl start moodle-cron.timer >/dev/null 2>&1 || true
@@ -161,7 +188,7 @@ ssh -o BatchMode=yes "root@$WEB02_IP" "tar -C '$MOODLE_ROOT' -czf '$BACKUP_WEB02
 write_state "BACKED_UP"
 
 if [ "$MAINT_WAS" = "0" ]; then
-    php "$MOODLE_ROOT/admin/cli/maintenance.php" --enable >/dev/null
+    moodle_cli_web01 "$MOODLE_ROOT/admin/cli/maintenance.php" --enable >/dev/null
 fi
 if [ "$CRON_WAS" = "active" ]; then
     systemctl stop moodle-cron.timer
@@ -208,8 +235,8 @@ while IFS= read -r -d '' f; do php -l "$f" >/dev/null; done < <(find "$MOODLE_RO
 ssh -o BatchMode=yes "root@$WEB02_IP" "find '$MOODLE_ROOT/local/digieranative' '$MOODLE_ROOT/local/worksheetlibrary' '$MOODLE_ROOT/mod/worksheetgrader' -name '*.php' -print0 | xargs -0 -n1 php -l >/dev/null"
 
 say "===== CACHE / PHP-FPM ====="
-php "$MOODLE_ROOT/admin/cli/purge_caches.php" >/dev/null
-ssh -o BatchMode=yes "root@$WEB02_IP" "php '$MOODLE_ROOT/admin/cli/purge_caches.php' >/dev/null"
+moodle_cli_web01 "$MOODLE_ROOT/admin/cli/purge_caches.php" >/dev/null
+moodle_cli_web02 "$MOODLE_ROOT/admin/cli/purge_caches.php" >/dev/null
 if systemctl is-active --quiet php8.3-fpm; then systemctl reload php8.3-fpm; fi
 ssh -o BatchMode=yes "root@$WEB02_IP" "if systemctl is-active --quiet php8.3-fpm; then systemctl reload php8.3-fpm; fi"
 
