@@ -674,7 +674,12 @@ export const open = async(editor) => {
                     '<div class="alert alert-success py-2">Đã đưa học liệu vào thùng rác. File R2 chưa bị xóa.</div>'
                 );
             } catch (error) {
-                showStatus(root, `<div class="alert alert-danger py-2">${escapeHtml(error?.message || 'Không thể đưa vào thùng rác.')}</div>`);
+                showStatus(
+            root,
+            `<div class="alert alert-danger py-2">${escapeHtml(
+                error?.message || 'Không thể đưa vào thùng rác.'
+            )}</div>`
+        );
             }
             return;
         }
@@ -687,7 +692,12 @@ export const open = async(editor) => {
                 await refreshSelected(uuid, 'library');
                 showStatus(root, '<div class="alert alert-success py-2">Đã khôi phục học liệu.</div>');
             } catch (error) {
-                showStatus(root, `<div class="alert alert-danger py-2">${escapeHtml(error?.message || 'Khôi phục thất bại.')}</div>`);
+                showStatus(
+            root,
+            `<div class="alert alert-danger py-2">${escapeHtml(
+                error?.message || 'Khôi phục thất bại.'
+            )}</div>`
+        );
             }
             return;
         }
@@ -720,7 +730,12 @@ export const open = async(editor) => {
                 );
             } catch (error) {
                 purgeConfirming = false;
-                showStatus(root, `<div class="alert alert-danger py-2">${escapeHtml(error?.message || 'Xóa vĩnh viễn thất bại.')}</div>`);
+                showStatus(
+            root,
+            `<div class="alert alert-danger py-2">${escapeHtml(
+                error?.message || 'Xóa vĩnh viễn thất bại.'
+            )}</div>`
+        );
                 if (selected) {
                     await loadAdvanced(selected);
                 }
