@@ -1,4 +1,6 @@
+import commonjs from '@rollup/plugin-commonjs';
 import {nodeResolve} from '@rollup/plugin-node-resolve';
+import replace from '@rollup/plugin-replace';
 
 export default {
     input: 'src/index.js',
@@ -12,8 +14,15 @@ export default {
     },
 
     plugins: [
+        replace({
+            preventAssignment: true,
+            'process.env.NODE_ENV': JSON.stringify('production'),
+        }),
         nodeResolve({
             browser: true,
+        }),
+        commonjs({
+            include: /node_modules/,
         }),
     ],
 
