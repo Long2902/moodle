@@ -15,6 +15,11 @@ const getMediaVersions = async(config, mediauuid) => Ajax.call([{
     args: {contextid: config.contextid, mediauuid},
 }])[0];
 
+const resolveReferences = async(config, referenceuuids) => Ajax.call([{
+    methodname: 'local_digieramedia_resolve_references',
+    args: {contextid: config.contextid, referenceuuids},
+}])[0];
+
 const createReference = async(
     config,
     mediauuid,
@@ -26,6 +31,21 @@ const createReference = async(
         contextid: config.contextid,
         mediauuid,
         displayprofile: 'embedded',
+        versionmode,
+        pinnedversionid,
+    },
+}])[0];
+
+const updateReferenceVersion = async(
+    config,
+    referenceuuid,
+    versionmode,
+    pinnedversionid = 0
+) => Ajax.call([{
+    methodname: 'local_digieramedia_update_reference_version',
+    args: {
+        contextid: config.contextid,
+        referenceuuid,
         versionmode,
         pinnedversionid,
     },
@@ -201,7 +221,7 @@ const showUploadProgress = (root, file, loaded, total, state = 'uploading') => {
     </div>`;
 };
 
-const renderAdvanced = (root, data, versionmode, pinnedversionid) => {
+const renderAdvanced = (root, data, versionmode, pinnedversionid, editingReference) => {
     const body = root.querySelector('[data-region="advanced-body"]');
     if (!body) {
         return;
@@ -226,10 +246,12 @@ const renderAdvanced = (root, data, versionmode, pinnedversionid) => {
         '<button type="button" class="btn btn-outline-primary btn-sm w-100" ' +
             'data-action="replace-media">Thay thế file</button>' :
         '';
+    const versionLabel = editingReference ? 'Cấu hình reference đang chọn' : 'Cách reference mới chọn phiên bản';
     body.innerHTML = `<div class="mb-2"><strong>Lịch sử phiên bản</strong></div>
         ${history}
         ${canManage ? `<hr>
-        <div class="small fw-semibold mb-1">Cách reference chọn phiên bản</div>
+        <div class="small fw-semibold mb-1">${escapeHtml(versionLabel)}</div>
+        ${editingReference ? '<div class="small text-primary mb-2">Đang chỉnh reference đã chèn.</div>' : ''}
         <label class="d-block small mb-1">
             <input type="radio" name="digiera-version-mode" data-action="version-mode"
                 value="FOLLOW_CURRENT" ${versionmode === 'FOLLOW_CURRENT' ? 'checked' : ''}>
@@ -252,7 +274,9 @@ export const open = async(editor) => {
         return;
     }
 
+    const selectedReference = ReferenceComponent.getSelectedReference(editor);
     const bookmark = editor.selection.getBookmark();
+    let editingReference = null;
     let tab = 'library';
     let selected = null;
     let lastData = {items: []};
@@ -261,15 +285,45 @@ export const open = async(editor) => {
     let pinnedversionid = 0;
     let advancedRequest = 0;
 
+    if (selectedReference?.referenceuuid) {
+        try {
+            const resolved = await resolveReferences(config, [selectedReference.referenceuuid]);
+            const item = resolved?.[0] || null;
+            if (item) {
+                editingReference = item;
+                selected = {
+                    uuid: item.mediauuid,
+                    name: item.name,
+                    mediatype: item.mediatype,
+                    size: Number(item.size || 0),
+                    modified: Number(item.modified || 0),
+                    visibility: item.visibility || '',
+                };
+                versionmode = item.versionmode === 'PINNED_VERSION' ? 'PINNED_VERSION' : 'FOLLOW_CURRENT';
+                pinnedversionid = Number(item.pinnedversionid || 0);
+            }
+        } catch (error) {
+            editingReference = null;
+        }
+    }
+
     const modal = await DigieraMediaModal.create({templateContext: {canupload: Boolean(config.canupload)}});
     const root = modal.getRoot()[0];
     const uploadInput = root.querySelector('[data-region="upload-input"]');
     const replaceInput = root.querySelector('[data-region="replace-input"]');
     const dropzone = root.querySelector('[data-region="upload-dropzone"]');
+    const saveButton = root.querySelector('[data-action="save"]');
     const rerender = () => renderItems(root, lastData, selected?.uuid || '');
-    const resetVersionChoice = () => {
+    const syncSaveMode = () => {
+        if (saveButton) {
+            saveButton.textContent = editingReference ? 'Cập nhật reference' : 'Chèn vào bài';
+        }
+    };
+    const beginNewReference = () => {
+        editingReference = null;
         versionmode = 'FOLLOW_CURRENT';
         pinnedversionid = 0;
+        syncSaveMode();
     };
 
     const load = async(query = '') => {
@@ -305,7 +359,8 @@ export const open = async(editor) => {
             if (versionmode === 'PINNED_VERSION' && !pinnedversionid) {
                 pinnedversionid = Number(data.currentversionid || 0);
             }
-            renderAdvanced(root, data, versionmode, pinnedversionid);
+            const isEditing = Boolean(editingReference && editingReference.mediauuid === media.uuid);
+            renderAdvanced(root, data, versionmode, pinnedversionid, isEditing);
         } catch (error) {
             if (requestId === advancedRequest && body) {
                 body.innerHTML = '<div class="alert alert-danger py-1 small">Không tải được lịch sử phiên bản.</div>';
@@ -329,7 +384,7 @@ export const open = async(editor) => {
                 );
                 showUploadProgress(root, file, file.size, file.size, 'verifying');
                 selected = media;
-                resetVersionChoice();
+                beginNewReference();
                 tab = 'library';
                 await load('');
                 updatePreview(root, selected);
@@ -392,7 +447,7 @@ export const open = async(editor) => {
         if (nav) {
             tab = nav.dataset.tab;
             selected = null;
-            resetVersionChoice();
+            beginNewReference();
             root.querySelectorAll('[data-tab]').forEach((button) => button.classList.toggle('is-active', button === nav));
             updatePreview(root, selected);
             load(root.querySelector('[data-region="search"]')?.value || '');
@@ -400,6 +455,10 @@ export const open = async(editor) => {
         }
         const item = event.target.closest('[data-action="select-media"]');
         if (item) {
+            const keepEditing = Boolean(editingReference && editingReference.mediauuid === item.dataset.mediaUuid);
+            if (!keepEditing) {
+                beginNewReference();
+            }
             selected = {
                 uuid: item.dataset.mediaUuid,
                 name: item.dataset.mediaName,
@@ -408,7 +467,6 @@ export const open = async(editor) => {
                 modified: Number(item.dataset.mediaModified || 0),
                 visibility: item.dataset.mediaVisibility || '',
             };
-            resetVersionChoice();
             rerender();
             updatePreview(root, selected);
             void loadAdvanced(selected);
@@ -489,18 +547,32 @@ export const open = async(editor) => {
             save.disabled = true;
         }
         try {
+            const pin = versionmode === 'PINNED_VERSION' ? pinnedversionid : 0;
+            if (editingReference && editingReference.mediauuid === selected.uuid) {
+                const reference = await updateReferenceVersion(
+                    config,
+                    editingReference.referenceuuid,
+                    versionmode,
+                    pin
+                );
+                ReferenceComponent.updateReferenceState(editor, reference);
+                modal.hide();
+                editor.focus();
+                return;
+            }
+
             const reference = await createReference(
                 config,
                 selected.uuid,
                 versionmode,
-                versionmode === 'PINNED_VERSION' ? pinnedversionid : 0
+                pin
             );
             editor.selection.moveToBookmark(bookmark);
             ReferenceComponent.insert(editor, reference);
             modal.hide();
             editor.focus();
         } catch (error) {
-            showStatus(root, '<div class="alert alert-danger">Không thể tạo tham chiếu học liệu.</div>');
+            showStatus(root, '<div class="alert alert-danger">Không thể lưu cấu hình reference học liệu.</div>');
             if (save) {
                 save.disabled = false;
             }
@@ -508,5 +580,12 @@ export const open = async(editor) => {
     });
 
     updatePreview(root, selected);
+    syncSaveMode();
     await load();
+    if (selected) {
+        rerender();
+        updatePreview(root, selected);
+        syncSaveMode();
+        await loadAdvanced(selected);
+    }
 };
