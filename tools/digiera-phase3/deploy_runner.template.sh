@@ -41,6 +41,7 @@ allowed = (
     'public/local/worksheetlibrary',
     'public/mod/worksheetgrader',
 )
+ancestor_dirs = {'public', 'public/local', 'public/mod'}
 with tarfile.open(p, 'r:gz') as tf:
     members = tf.getmembers()
     if not members:
@@ -51,6 +52,10 @@ with tarfile.open(p, 'r:gz') as tf:
             raise SystemExit(f'unsafe archive path: {m.name}')
         if m.issym() or m.islnk():
             raise SystemExit(f'links are not allowed in candidate: {m.name}')
+        if name in ancestor_dirs:
+            if not m.isdir():
+                raise SystemExit(f'ancestor entry must be a directory: {m.name}')
+            continue
         if not any(name == root or name.startswith(root + '/') for root in allowed):
             raise SystemExit(f'path outside approved plugin roots: {m.name}')
 print('PACKAGE_PATH_SAFETY=PASS')
