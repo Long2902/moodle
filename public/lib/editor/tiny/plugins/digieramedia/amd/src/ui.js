@@ -15,6 +15,26 @@ const getMediaVersions = async(config, mediauuid) => Ajax.call([{
     args: {contextid: config.contextid, mediauuid},
 }])[0];
 
+const getMediaUsage = async(config, mediauuid) => Ajax.call([{
+    methodname: 'local_digieramedia_get_media_usage',
+    args: {contextid: config.contextid, mediauuid},
+}])[0];
+
+const trashMedia = async(config, mediauuid, reason = '') => Ajax.call([{
+    methodname: 'local_digieramedia_trash_media',
+    args: {contextid: config.contextid, mediauuid, reason},
+}])[0];
+
+const restoreMedia = async(config, mediauuid) => Ajax.call([{
+    methodname: 'local_digieramedia_restore_media',
+    args: {contextid: config.contextid, mediauuid},
+}])[0];
+
+const purgeMedia = async(config, mediauuid, force = false) => Ajax.call([{
+    methodname: 'local_digieramedia_purge_media',
+    args: {contextid: config.contextid, mediauuid, force},
+}])[0];
+
 const resolveReferences = async(config, referenceuuids) => Ajax.call([{
     methodname: 'local_digieramedia_resolve_references',
     args: {contextid: config.contextid, referenceuuids},
@@ -98,6 +118,19 @@ const typeLabel = (type) => ({
     generic: 'FILE',
 })[normaliseType(type)];
 
+const statusLabel = (status) => {
+    if (status === 'TRASHED') {
+        return 'Trong thùng rác';
+    }
+    if (status === 'PURGING') {
+        return 'Đang xóa vĩnh viễn';
+    }
+    if (status === 'PURGED') {
+        return 'Đã xóa vĩnh viễn';
+    }
+    return 'Sẵn sàng';
+};
+
 const filteredItems = (data, root) => {
     const type = root.querySelector('[data-region="type-filter"]')?.value || '';
     const sort = root.querySelector('[data-region="sort"]')?.value || 'newest';
@@ -130,11 +163,14 @@ const renderItems = (root, data, selectedUuid) => {
     target.innerHTML = items.map((item) => {
         const type = normaliseType(item.mediatype);
         const selected = item.uuid === selectedUuid;
+        const trashed = item.status === 'TRASHED';
+        const trashBadge = trashed ? '<span class="badge text-bg-secondary mt-1">Thùng rác</span>' : '';
         return `<button type="button" class="tiny-digieramedia__card ${selected ? 'is-selected' : ''}"
             data-action="select-media" data-media-uuid="${escapeHtml(item.uuid)}"
             data-media-name="${escapeHtml(item.name)}" data-media-type="${escapeHtml(type)}"
             data-media-size="${Number(item.size || 0)}" data-media-modified="${Number(item.modified || 0)}"
-            data-media-visibility="${escapeHtml(item.visibility || '')}">
+            data-media-visibility="${escapeHtml(item.visibility || '')}"
+            data-media-status="${escapeHtml(item.status || 'ACTIVE')}">
             <span class="tiny-digieramedia__selectedmark" aria-hidden="true">✓</span>
             <span class="tiny-digieramedia__thumb">
                 <span class="tiny-digieramedia__fileicon" data-type="${escapeHtml(type)}">
@@ -143,6 +179,7 @@ const renderItems = (root, data, selectedUuid) => {
             </span>
             <span class="tiny-digieramedia__name">${escapeHtml(item.name)}</span>
             <span class="tiny-digieramedia__meta">${formatBytes(item.size)} · ${formatDate(item.modified)}</span>
+            ${trashBadge}
         </button>`;
     }).join('');
 };
@@ -164,6 +201,7 @@ const updatePreview = (root, selected) => {
         return;
     }
     const type = normaliseType(selected.mediatype);
+    const status = selected.status || 'ACTIVE';
     preview.innerHTML = `<div class="tiny-digieramedia__previewbox">
         <div class="tiny-digieramedia__previewfile" data-type="${escapeHtml(type)}">
             ${typeLabel(type)}
@@ -174,15 +212,15 @@ const updatePreview = (root, selected) => {
         <dt>Dung lượng</dt><dd>${formatBytes(selected.size)}</dd>
         <dt>Cập nhật</dt><dd>${formatDate(selected.modified)}</dd>
         <dt>Phạm vi</dt><dd>${escapeHtml(selected.visibility || '—')}</dd>
-        <dt>Trạng thái</dt><dd>Sẵn sàng</dd></dl>
+        <dt>Trạng thái</dt><dd>${escapeHtml(statusLabel(status))}</dd></dl>
         <details class="tiny-digieramedia__advanced" open>
             <summary>Tùy chọn nâng cao (Admin/KTV)</summary>
             <div class="tiny-digieramedia__advancedbody" data-region="advanced-body">
-                <div class="text-muted small">Đang tải lịch sử phiên bản…</div>
+                <div class="text-muted small">Đang tải phiên bản và vị trí sử dụng…</div>
             </div>
         </details>`;
     if (save) {
-        save.disabled = false;
+        save.disabled = status !== 'ACTIVE';
     }
 };
 
@@ -221,14 +259,12 @@ const showUploadProgress = (root, file, loaded, total, state = 'uploading') => {
     </div>`;
 };
 
-const renderAdvanced = (root, data, versionmode, pinnedversionid, editingReference) => {
-    const body = root.querySelector('[data-region="advanced-body"]');
-    if (!body) {
-        return;
+const versionHistoryHtml = (data) => {
+    const versions = data?.versions || [];
+    if (!versions.length) {
+        return '<div class="text-muted small">Chưa có phiên bản.</div>';
     }
-    const versions = data.versions || [];
-    const pinValue = Number(pinnedversionid || data.currentversionid || 0);
-    const history = versions.length ? versions.map((version) => `
+    return versions.map((version) => `
         <div class="border rounded px-2 py-1 mb-1 small">
             <div class="d-flex justify-content-between gap-2">
                 <strong>v${Number(version.versionno)}</strong>
@@ -236,22 +272,28 @@ const renderAdvanced = (root, data, versionmode, pinnedversionid, editingReferen
             </div>
             <div class="text-truncate">${escapeHtml(version.displayfilename)}</div>
             <div class="text-muted">${formatBytes(version.filesize)} · ${formatDate(version.timecreated)}</div>
-        </div>`).join('') : '<div class="text-muted small">Chưa có phiên bản.</div>';
+        </div>`).join('');
+};
+
+const versionControlsHtml = (data, versionmode, pinnedversionid, editingReference) => {
+    const versions = data?.versions || [];
+    const canManage = Boolean(data?.canmanageversions || data?.canreplace);
+    if (!canManage || data?.mediastatus === 'TRASHED') {
+        return '<div class="text-muted small">Lịch sử phiên bản ở chế độ chỉ đọc.</div>';
+    }
+    const pinValue = Number(pinnedversionid || data.currentversionid || 0);
     const options = versions.map((version) => `
         <option value="${Number(version.id)}" ${Number(version.id) === pinValue ? 'selected' : ''}>
             v${Number(version.versionno)} · ${escapeHtml(version.displayfilename)}
         </option>`).join('');
-    const canManage = Boolean(data.canmanageversions || data.canreplace);
     const replaceButton = data.canreplace ?
         '<button type="button" class="btn btn-outline-primary btn-sm w-100" ' +
-            'data-action="replace-media">Thay thế file</button>' :
-        '';
-    const versionLabel = editingReference ? 'Cấu hình reference đang chọn' : 'Cách reference mới chọn phiên bản';
-    body.innerHTML = `<div class="mb-2"><strong>Lịch sử phiên bản</strong></div>
-        ${history}
-        ${canManage ? `<hr>
-        <div class="small fw-semibold mb-1">${escapeHtml(versionLabel)}</div>
-        ${editingReference ? '<div class="small text-primary mb-2">Đang chỉnh reference đã chèn.</div>' : ''}
+            'data-action="replace-media">Thay thế file</button>' : '';
+    const label = editingReference ? 'Cấu hình reference đang chọn' : 'Cách reference mới chọn phiên bản';
+    const editInfo = editingReference ?
+        '<div class="small text-primary mb-2">Đang chỉnh reference đã chèn.</div>' : '';
+    return `<div class="small fw-semibold mb-1">${escapeHtml(label)}</div>
+        ${editInfo}
         <label class="d-block small mb-1">
             <input type="radio" name="digiera-version-mode" data-action="version-mode"
                 value="FOLLOW_CURRENT" ${versionmode === 'FOLLOW_CURRENT' ? 'checked' : ''}>
@@ -264,8 +306,108 @@ const renderAdvanced = (root, data, versionmode, pinnedversionid, editingReferen
         </label>
         <select class="form-select form-select-sm mb-2" data-region="pin-version"
             ${versionmode === 'PINNED_VERSION' ? '' : 'disabled'}>${options}</select>
-        ${replaceButton}` :
-        '<div class="text-muted small">Bạn không có quyền quản trị phiên bản.</div>'}`;
+        ${replaceButton}`;
+};
+
+const usageHtml = (usage) => {
+    if (!usage) {
+        return '<div class="text-muted small">Không có quyền xem vị trí sử dụng.</div>';
+    }
+    const rows = usage.usages || [];
+    const visibleInfo = Number(usage.visiblecount || 0) < Number(usage.livecount || 0) ?
+        `<div class="small text-muted mb-1">Hiển thị ${Number(usage.visiblecount || 0)} vị trí bạn có quyền xem.</div>` : '';
+    const list = rows.length ? rows.map((row) => {
+        const primary = row.activityname || row.coursename || row.fallback;
+        const secondary = row.activityname && row.coursename ? row.coursename : row.status;
+        const pin = row.versionmode === 'PINNED_VERSION' && Number(row.pinnedversionno || 0) > 0 ?
+            ` · ghim v${Number(row.pinnedversionno)}` : '';
+        const label = `${escapeHtml(primary)}${escapeHtml(pin)}`;
+        const linked = row.url ?
+            `<a href="${escapeHtml(row.url)}" target="_blank" rel="noopener noreferrer">${label}</a>` : label;
+        return `<div class="border rounded px-2 py-1 mb-1 small">
+            <div>${linked}</div>
+            <div class="text-muted">${escapeHtml(secondary || row.status)} · ${escapeHtml(row.status)}</div>
+        </div>`;
+    }).join('') : '<div class="text-muted small">Chưa có vị trí sử dụng hiển thị.</div>';
+    return `<div class="mb-1"><strong>Vị trí đang sử dụng (${Number(usage.livecount || 0)})</strong></div>
+        ${visibleInfo}${list}`;
+};
+
+const lifecycleHtml = (usage, purgeConfirming) => {
+    if (!usage) {
+        return '';
+    }
+    const status = usage.mediastatus || 'ACTIVE';
+    if (status === 'ACTIVE') {
+        if (!usage.cantrash) {
+            return '<div class="text-muted small">Bạn không có quyền đưa học liệu này vào thùng rác.</div>';
+        }
+        const live = Number(usage.livecount || 0);
+        const info = live > 0 ?
+            `Đưa vào thùng rác không xóa file R2 và không làm hỏng ${live} vị trí đang sử dụng.` :
+            'Đưa vào thùng rác chỉ ẩn học liệu khỏi thư viện; file R2 chưa bị xóa.';
+        return `<div class="small text-muted mb-2">${escapeHtml(info)}</div>
+            <button type="button" class="btn btn-outline-danger btn-sm w-100" data-action="trash-media">
+                Đưa vào thùng rác
+            </button>`;
+    }
+    if (status !== 'TRASHED' && status !== 'PURGING') {
+        return '<div class="text-muted small">Học liệu không còn khả dụng để quản trị vòng đời.</div>';
+    }
+
+    const deleted = usage.deletedat ? `Đã đưa vào thùng rác ${formatDate(usage.deletedat)}` : 'Trong thùng rác';
+    const actor = usage.deletedbyname ? ` bởi ${escapeHtml(usage.deletedbyname)}` : '';
+    const reason = usage.reason ? `<div class="small text-muted">Lý do: ${escapeHtml(usage.reason)}</div>` : '';
+    const restore = usage.canrestore && status === 'TRASHED' ?
+        '<button type="button" class="btn btn-outline-primary btn-sm w-100 mb-2" ' +
+            'data-action="restore-media">Khôi phục</button>' : '';
+    let purge = '';
+    if (usage.canpurge) {
+        if (!purgeConfirming) {
+            purge = '<button type="button" class="btn btn-danger btn-sm w-100" ' +
+                'data-action="request-purge">Xóa vĩnh viễn</button>';
+        } else {
+            const live = Number(usage.livecount || 0);
+            const warning = live > 0 ?
+                `Học liệu đang được dùng tại ${live} vị trí. Xóa cưỡng bức sẽ xóa file vật lý khỏi R2 và làm ` +
+                    `${live} reference chuyển sang trạng thái không khả dụng.` :
+                'Xóa vĩnh viễn tất cả phiên bản vật lý khỏi Cloudflare R2? Thao tác này không thể hoàn tác.';
+            purge = `<div class="alert alert-danger py-2 small">${escapeHtml(warning)}</div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" data-action="cancel-purge">
+                        Không xóa
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm flex-fill" data-action="confirm-purge"
+                        data-live-count="${live}">Xác nhận xóa vĩnh viễn</button>
+                </div>`;
+        }
+    }
+    return `<div class="mb-2"><span class="badge text-bg-secondary">Trong thùng rác</span></div>
+        <div class="small mb-1">${escapeHtml(deleted)}${actor}</div>${reason}${restore}${purge}`;
+};
+
+const renderAdvanced = (
+    root,
+    versionData,
+    usageData,
+    versionmode,
+    pinnedversionid,
+    editingReference,
+    purgeConfirming
+) => {
+    const body = root.querySelector('[data-region="advanced-body"]');
+    if (!body) {
+        return;
+    }
+    body.innerHTML = `<div class="mb-2"><strong>Lịch sử phiên bản</strong></div>
+        ${versionHistoryHtml(versionData)}
+        <hr>
+        ${versionControlsHtml(versionData, versionmode, pinnedversionid, editingReference)}
+        <hr>
+        ${usageHtml(usageData)}
+        <hr>
+        <div class="mb-1"><strong>Vòng đời học liệu</strong></div>
+        ${lifecycleHtml(usageData, purgeConfirming)}`;
 };
 
 export const open = async(editor) => {
@@ -284,6 +426,7 @@ export const open = async(editor) => {
     let versionmode = 'FOLLOW_CURRENT';
     let pinnedversionid = 0;
     let advancedRequest = 0;
+    let purgeConfirming = false;
 
     if (selectedReference?.referenceuuid) {
         try {
@@ -298,9 +441,13 @@ export const open = async(editor) => {
                     size: Number(item.size || 0),
                     modified: Number(item.modified || 0),
                     visibility: item.visibility || '',
+                    status: item.mediastatus || 'ACTIVE',
                 };
                 versionmode = item.versionmode === 'PINNED_VERSION' ? 'PINNED_VERSION' : 'FOLLOW_CURRENT';
                 pinnedversionid = Number(item.pinnedversionid || 0);
+                if (selected.status === 'TRASHED') {
+                    tab = 'trash';
+                }
             }
         } catch (error) {
             editingReference = null;
@@ -317,12 +464,19 @@ export const open = async(editor) => {
     const syncSaveMode = () => {
         if (saveButton) {
             saveButton.textContent = editingReference ? 'Cập nhật reference' : 'Chèn vào bài';
+            saveButton.disabled = !selected || selected.status !== 'ACTIVE';
         }
+    };
+    const syncTab = () => {
+        root.querySelectorAll('[data-tab]').forEach((button) => {
+            button.classList.toggle('is-active', button.dataset.tab === tab);
+        });
     };
     const beginNewReference = () => {
         editingReference = null;
         versionmode = 'FOLLOW_CURRENT';
         pinnedversionid = 0;
+        purgeConfirming = false;
         syncSaveMode();
     };
 
@@ -347,24 +501,47 @@ export const open = async(editor) => {
         if (!body || !media) {
             return;
         }
-        if (!lastData.canreplace && !lastData.canmanageversions) {
-            body.innerHTML = '<div class="text-muted small">Bạn không có quyền quản trị phiên bản.</div>';
+        body.innerHTML = '<div class="text-muted small">Đang tải phiên bản và vị trí sử dụng…</div>';
+        const versionPromise = getMediaVersions(config, media.uuid);
+        const usagePromise = lastData.canviewusage ? getMediaUsage(config, media.uuid) : Promise.resolve(null);
+        const [versionResult, usageResult] = await Promise.allSettled([versionPromise, usagePromise]);
+        if (requestId !== advancedRequest || selected?.uuid !== media.uuid) {
             return;
         }
-        try {
-            const data = await getMediaVersions(config, media.uuid);
-            if (requestId !== advancedRequest || selected?.uuid !== media.uuid) {
-                return;
-            }
-            if (versionmode === 'PINNED_VERSION' && !pinnedversionid) {
-                pinnedversionid = Number(data.currentversionid || 0);
-            }
-            const isEditing = Boolean(editingReference && editingReference.mediauuid === media.uuid);
-            renderAdvanced(root, data, versionmode, pinnedversionid, isEditing);
-        } catch (error) {
-            if (requestId === advancedRequest && body) {
-                body.innerHTML = '<div class="alert alert-danger py-1 small">Không tải được lịch sử phiên bản.</div>';
-            }
+        const versionData = versionResult.status === 'fulfilled' ? versionResult.value : {
+            versions: [],
+            currentversionid: 0,
+            canreplace: false,
+            canmanageversions: false,
+            mediastatus: media.status || 'ACTIVE',
+        };
+        const usageData = usageResult.status === 'fulfilled' ? usageResult.value : null;
+        if (versionmode === 'PINNED_VERSION' && !pinnedversionid) {
+            pinnedversionid = Number(versionData.currentversionid || 0);
+        }
+        const isEditing = Boolean(editingReference && editingReference.mediauuid === media.uuid);
+        renderAdvanced(
+            root,
+            versionData,
+            usageData,
+            versionmode,
+            pinnedversionid,
+            isEditing,
+            purgeConfirming
+        );
+    };
+
+    const refreshSelected = async(mediauuid, nextTab) => {
+        tab = nextTab;
+        syncTab();
+        const query = root.querySelector('[data-region="search"]')?.value || '';
+        await load(query);
+        selected = (lastData.items || []).find((item) => item.uuid === mediauuid) || null;
+        updatePreview(root, selected);
+        syncSaveMode();
+        if (selected) {
+            rerender();
+            await loadAdvanced(selected);
         }
     };
 
@@ -383,11 +560,13 @@ export const open = async(editor) => {
                     (loaded, total) => showUploadProgress(root, file, loaded, total)
                 );
                 showUploadProgress(root, file, file.size, file.size, 'verifying');
-                selected = media;
+                selected = {...media, status: media.status || 'ACTIVE'};
                 beginNewReference();
                 tab = 'library';
+                syncTab();
                 await load('');
                 updatePreview(root, selected);
+                syncSaveMode();
                 void loadAdvanced(selected);
                 showUploadProgress(root, file, file.size, file.size, 'done');
             }
@@ -407,7 +586,7 @@ export const open = async(editor) => {
     };
 
     const replaceSelectedFile = async(file) => {
-        if (!selected || !lastData.canreplace || uploading || !file) {
+        if (!selected || selected.status !== 'ACTIVE' || !lastData.canreplace || uploading || !file) {
             return;
         }
         uploading = true;
@@ -422,9 +601,10 @@ export const open = async(editor) => {
                 replacingUuid
             );
             showUploadProgress(root, file, file.size, file.size, 'verifying');
-            selected = media;
+            selected = {...media, status: media.status || 'ACTIVE'};
             await load(root.querySelector('[data-region="search"]')?.value || '');
             updatePreview(root, selected);
+            syncSaveMode();
             await loadAdvanced(selected);
             showUploadProgress(root, file, file.size, file.size, 'done');
             showStatus(
@@ -442,15 +622,16 @@ export const open = async(editor) => {
         }
     };
 
-    root.addEventListener('click', (event) => {
+    root.addEventListener('click', async(event) => {
         const nav = event.target.closest('[data-tab]');
         if (nav) {
             tab = nav.dataset.tab;
             selected = null;
             beginNewReference();
-            root.querySelectorAll('[data-tab]').forEach((button) => button.classList.toggle('is-active', button === nav));
+            syncTab();
             updatePreview(root, selected);
-            load(root.querySelector('[data-region="search"]')?.value || '');
+            syncSaveMode();
+            await load(root.querySelector('[data-region="search"]')?.value || '');
             return;
         }
         const item = event.target.closest('[data-action="select-media"]');
@@ -459,6 +640,7 @@ export const open = async(editor) => {
             if (!keepEditing) {
                 beginNewReference();
             }
+            purgeConfirming = false;
             selected = {
                 uuid: item.dataset.mediaUuid,
                 name: item.dataset.mediaName,
@@ -466,14 +648,83 @@ export const open = async(editor) => {
                 size: Number(item.dataset.mediaSize || 0),
                 modified: Number(item.dataset.mediaModified || 0),
                 visibility: item.dataset.mediaVisibility || '',
+                status: item.dataset.mediaStatus || 'ACTIVE',
             };
             rerender();
             updatePreview(root, selected);
+            syncSaveMode();
             void loadAdvanced(selected);
             return;
         }
         if (event.target.closest('[data-action="replace-media"]')) {
-            replaceInput?.click();
+            if (selected?.status === 'ACTIVE') {
+                replaceInput?.click();
+            }
+            return;
+        }
+        if (event.target.closest('[data-action="trash-media"]') && selected) {
+            try {
+                const uuid = selected.uuid;
+                showStatus(root, '<div class="alert alert-info py-2">Đang đưa học liệu vào thùng rác…</div>');
+                await trashMedia(config, uuid, 'Moved to Trash from TinyMCE media library');
+                beginNewReference();
+                await refreshSelected(uuid, 'trash');
+                showStatus(
+                    root,
+                    '<div class="alert alert-success py-2">Đã đưa học liệu vào thùng rác. File R2 chưa bị xóa.</div>'
+                );
+            } catch (error) {
+                showStatus(root, `<div class="alert alert-danger py-2">${escapeHtml(error?.message || 'Không thể đưa vào thùng rác.')}</div>`);
+            }
+            return;
+        }
+        if (event.target.closest('[data-action="restore-media"]') && selected) {
+            try {
+                const uuid = selected.uuid;
+                showStatus(root, '<div class="alert alert-info py-2">Đang khôi phục học liệu…</div>');
+                await restoreMedia(config, uuid);
+                beginNewReference();
+                await refreshSelected(uuid, 'library');
+                showStatus(root, '<div class="alert alert-success py-2">Đã khôi phục học liệu.</div>');
+            } catch (error) {
+                showStatus(root, `<div class="alert alert-danger py-2">${escapeHtml(error?.message || 'Khôi phục thất bại.')}</div>`);
+            }
+            return;
+        }
+        if (event.target.closest('[data-action="request-purge"]') && selected) {
+            purgeConfirming = true;
+            await loadAdvanced(selected);
+            return;
+        }
+        if (event.target.closest('[data-action="cancel-purge"]') && selected) {
+            purgeConfirming = false;
+            await loadAdvanced(selected);
+            return;
+        }
+        const confirmPurge = event.target.closest('[data-action="confirm-purge"]');
+        if (confirmPurge && selected) {
+            try {
+                const uuid = selected.uuid;
+                const force = Number(confirmPurge.dataset.liveCount || 0) > 0;
+                showStatus(root, '<div class="alert alert-danger py-2">Đang xóa vĩnh viễn các phiên bản trên R2…</div>');
+                await purgeMedia(config, uuid, force);
+                selected = null;
+                editingReference = null;
+                purgeConfirming = false;
+                await load(root.querySelector('[data-region="search"]')?.value || '');
+                updatePreview(root, selected);
+                syncSaveMode();
+                showStatus(
+                    root,
+                    '<div class="alert alert-success py-2">Đã xóa vĩnh viễn học liệu khỏi Cloudflare R2.</div>'
+                );
+            } catch (error) {
+                purgeConfirming = false;
+                showStatus(root, `<div class="alert alert-danger py-2">${escapeHtml(error?.message || 'Xóa vĩnh viễn thất bại.')}</div>`);
+                if (selected) {
+                    await loadAdvanced(selected);
+                }
+            }
             return;
         }
         if (event.target.closest('[data-region="upload-dropzone"]')) {
@@ -491,7 +742,7 @@ export const open = async(editor) => {
 
     root.addEventListener('change', (event) => {
         const mode = event.target.closest('[data-action="version-mode"]');
-        if (mode) {
+        if (mode && selected?.status === 'ACTIVE') {
             versionmode = mode.value === 'PINNED_VERSION' ? 'PINNED_VERSION' : 'FOLLOW_CURRENT';
             const picker = root.querySelector('[data-region="pin-version"]');
             if (picker) {
@@ -502,7 +753,7 @@ export const open = async(editor) => {
             }
             return;
         }
-        if (event.target.matches('[data-region="pin-version"]')) {
+        if (event.target.matches('[data-region="pin-version"]') && selected?.status === 'ACTIVE') {
             pinnedversionid = Number(event.target.value || 0);
         }
     });
@@ -539,7 +790,7 @@ export const open = async(editor) => {
 
     modal.getRoot().on(ModalEvents.save, async(event) => {
         event.preventDefault();
-        if (!selected || uploading) {
+        if (!selected || selected.status !== 'ACTIVE' || uploading) {
             return;
         }
         const save = root.querySelector('[data-action="save"]');
@@ -581,6 +832,7 @@ export const open = async(editor) => {
 
     updatePreview(root, selected);
     syncSaveMode();
+    syncTab();
     await load();
     if (selected) {
         rerender();
