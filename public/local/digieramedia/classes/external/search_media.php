@@ -47,8 +47,18 @@ final class search_media extends external_api {
         $where = [];
         $sqlparams = [];
 
-        $where[] = 'm.status = :mediastatus';
-        $sqlparams['mediastatus'] = $tab === 'trash' ? 'TRASHED' : 'ACTIVE';
+        if ($tab === 'trash') {
+            [$statussql, $statusparams] = $DB->get_in_or_equal(
+                ['TRASHED', 'PURGING'],
+                SQL_PARAMS_NAMED,
+                'trashstatus'
+            );
+            $where[] = 'm.status ' . $statussql;
+            $sqlparams += $statusparams;
+        } else {
+            $where[] = 'm.status = :mediastatus';
+            $sqlparams['mediastatus'] = 'ACTIVE';
+        }
 
         if (!$canviewall) {
             $sqlparams['owneruserid'] = (int)$USER->id;
