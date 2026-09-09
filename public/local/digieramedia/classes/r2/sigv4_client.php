@@ -67,7 +67,7 @@ final class sigv4_client implements client_interface {
             . ', SignedHeaders=' . $signedheaders . ', Signature=' . $signature;
 
         if (!function_exists('curl_init')) {
-            throw new \runtime_exception('R2 transport unavailable: PHP cURL extension is missing.');
+            throw new \RuntimeException('R2 transport unavailable: PHP cURL extension is missing.');
         }
 
         $headers = [];
@@ -99,7 +99,7 @@ final class sigv4_client implements client_interface {
 
         if ($result === false || $status < 200 || $status >= 300) {
             $suffix = $error !== '' ? ' transport=' . clean_param($error, PARAM_TEXT) : '';
-            throw new \runtime_exception('R2 HEAD verification failed with HTTP ' . $status . $suffix);
+            throw new \RuntimeException('R2 HEAD verification failed with HTTP ' . $status . $suffix);
         }
 
         return [
@@ -146,7 +146,7 @@ final class sigv4_client implements client_interface {
             . ', SignedHeaders=' . $signedheaders . ', Signature=' . $signature;
 
         if (!function_exists('curl_init')) {
-            throw new \runtime_exception('R2 transport unavailable: PHP cURL extension is missing.');
+            throw new \RuntimeException('R2 transport unavailable: PHP cURL extension is missing.');
         }
 
         $ch = curl_init($this->config->endpoint() . $uri);
@@ -171,7 +171,7 @@ final class sigv4_client implements client_interface {
             return;
         }
         $suffix = $error !== '' ? ' transport=' . clean_param($error, PARAM_TEXT) : '';
-        throw new \runtime_exception('R2 DELETE failed with HTTP ' . $status . $suffix);
+        throw new \RuntimeException('R2 DELETE failed with HTTP ' . $status . $suffix);
     }
 
     public function copy_object(string $sourcebucket, string $sourcekey, string $targetbucket, string $targetkey): array {

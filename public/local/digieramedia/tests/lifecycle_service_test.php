@@ -21,7 +21,7 @@ final class lifecycle_fake_r2_client implements client_interface {
     public function delete_object(string $bucket, string $key): void {
         $this->deletecount++;
         if ($this->failondelete > 0 && $this->deletecount === $this->failondelete) {
-            throw new \runtime_exception('synthetic delete failure');
+            throw new \RuntimeException('synthetic delete failure');
         }
         $this->deleted[] = $bucket . '/' . $key;
     }
@@ -126,7 +126,7 @@ final class lifecycle_service_test extends \advanced_testcase {
         try {
             $service->purge($USER->id, $context, $uuid, false);
             $this->fail('Synthetic R2 failure must propagate.');
-        } catch (\runtime_exception $e) {
+        } catch (\RuntimeException $e) {
             $this->assertStringContainsString('synthetic delete failure', $e->getMessage());
         }
         $this->assertSame('PURGING', $DB->get_field('local_digieramedia_media', 'status', ['id' => $mediaid]));
