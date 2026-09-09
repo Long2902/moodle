@@ -26,8 +26,8 @@ final class text_filter extends \core_filters\text_filter {
             if (!$reference || !in_array((string)$reference->status, ['ACTIVE', 'DRAFT'], true)) {
                 return $this->unavailable();
             }
-            $media = $DB->get_record('local_digieramedia_media', ['id' => (int)$reference->mediaid, 'status' => 'ACTIVE']);
-            if (!$media) {
+            $media = $DB->get_record('local_digieramedia_media', ['id' => (int)$reference->mediaid]);
+            if (!$media || !in_array((string)$media->status, ['ACTIVE', 'TRASHED'], true)) {
                 return $this->unavailable();
             }
             $versionid = (int)$media->currentversionid;
