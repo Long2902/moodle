@@ -1,0 +1,290 @@
+name: DIGIERA Tiptap V1 Phase2 Final Source Gate
+
+on:
+  push:
+    branches:
+      - digiera/tiptap-v1-phase2-gate
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: digiera-tiptap-v1-phase2-final-source-gate
+  cancel-in-progress: true
+
+env:
+  MATERIALIZATION_BASE_SHA: 4c88493463c403e116a622f0754a9e71b4733a47
+  CANONICAL_SHA: 4d90ebdf297e8e1b1b43051e046d42fa904b53da
+  ACCEPTED_LOCK_SHA256: bd28c54a123ae1da0895c60dcc34db8710732e00cb8dffc9c6280810aab7b473
+  ACCEPTED_AMD_SHA256: 448f5386ae4213ecf0695c6a7591a3578a90b1c05db748b89e507fff9c7528f7
+
+jobs:
+  final-source-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout isolated gate branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 3
+
+      - name: Prove gate branch tests exact canonical product source
+        shell: bash
+        run: |
+          set -euo pipefail
+          PARENT=$(git rev-parse HEAD~1)
+          echo GATE_BRANCH_PARENT=$PARENT
+          test "$PARENT" = "$CANONICAL_SHA"
+          git diff --exit-code "$CANONICAL_SHA" HEAD -- \
+            public/local/digieranative \
+            public/local/worksheetlibrary \
+            public/mod/worksheetgrader
+          echo CANONICAL_SOURCE_UNCHANGED_IN_GATE_BRANCH=PASS
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: public/local/digieranative/client/package-lock.json
+
+      - name: PHP lint and XMLDB parse
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=0
+          while IFS= read -r -d '' f; do
+            php -l "$f" >/dev/null
+            count=$((count+1))
+          done < <(find \
+            public/local/digieranative \
+            public/local/digieraoffice \
+            public/local/worksheetlibrary \
+            public/mod/worksheetgrader \
+            -name '*.php' -print0)
+          echo PHP_LINT_FILES=$count
+          test "$count" = "97"
+          echo PHP_LINT=PASS
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          for path in [
+              'public/local/worksheetlibrary/db/install.xml',
+              'public/mod/worksheetgrader/db/install.xml',
+          ]:
+              ET.parse(path)
+          print('XMLDB_PARSE=PASS')
+          PY
+
+      - name: Autosave and manual Save contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node public/local/digieranative/client/tests/autosave-standalone.mjs
+
+      - name: Native validator renderer and persistence contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          php public/local/digieranative/tests/standalone_validator.php
+          php public/local/digieranative/tests/standalone_renderer.php
+          php public/local/worksheetlibrary/tests/native_version_service_standalone.php
+          php public/mod/worksheetgrader/tests/preview_vertical_slice_standalone.php
+
+      - name: Tiptap adapter and static integration contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node public/local/digieranative/client/tests/tiptap-adapter-standalone.mjs
+          python3 public/local/digieranative/tests/tiptap_hybrid_static_contract.py
+          python3 public/local/worksheetlibrary/tests/native_ui_contract.py
+          python3 public/mod/worksheetgrader/tests/native_preview_ui_contract.py
+
+      - name: UI V1 visual source contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          index = Path('public/local/worksheetlibrary/index.php').read_text(encoding='utf-8')
+          styles = Path('public/local/worksheetlibrary/styles.css').read_text(encoding='utf-8')
+          ribbon = Path('public/local/digieranative/client/src/ribbon.js').read_text(encoding='utf-8')
+          required_index = [
+              "class'=>'wslib-grid'",
+              "class'=>'wslib-folders'",
+              "class'=>'wslib-results'",
+              "class'=>'wslib-detail'",
+              'data-action="new-item"',
+              '<option value="native">Native DIGIERA</option>',
+          ]
+          for token in required_index:
+              assert token in index, f'Library V1 visual/source token missing: {token}'
+          assert 'grid-template-columns:260px minmax(480px,1fr) 330px' in styles, 'three-panel geometry missing'
+          expected = "export const RIBBON_TABS = ['File', 'Home', 'Insert', 'Layout', 'Review', 'Math', 'View'];"
+          assert expected in ribbon, 'seven-tab Ribbon contract missing'
+          for token in ["id:'save'", "id:'table'", "id:'image'", "id:'question'", "id:'math'"]:
+              assert token in ribbon, f'Ribbon command missing: {token}'
+          print('WSLIB_UI_V1_VISUAL_CONTRACT=PASS')
+          print('SEVEN_TAB_RIBBON_CONTRACT=PASS')
+          PY
+
+      - name: JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=0
+          while IFS= read -r -d '' f; do
+            node --check "$f" >/dev/null
+            count=$((count+1))
+          done < <(find \
+            public/local/digieranative \
+            public/local/digieraoffice \
+            public/local/worksheetlibrary \
+            public/mod/worksheetgrader \
+            -name '*.js' -print0)
+          echo JS_SYNTAX_FILES=$count
+          test "$count" = "37"
+          echo JS_SYNTAX=PASS
+
+      - name: Clean install and 35-test Tiptap suite
+        working-directory: public/local/digieranative/client
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+          echo TIPTAP_VITEST_35=PASS
+
+      - name: Deterministic build and accepted hashes
+        working-directory: public/local/digieranative/client
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOCK=$(sha256sum package-lock.json | awk '{print $1}')
+          test "$LOCK" = "$ACCEPTED_LOCK_SHA256"
+          npm run build
+          cp ../amd/build/native_editor.min.js /tmp/native_editor.phase2.first.js
+          H1=$(sha256sum ../amd/build/native_editor.min.js | awk '{print $1}')
+          npm run build
+          cmp /tmp/native_editor.phase2.first.js ../amd/build/native_editor.min.js
+          H2=$(sha256sum ../amd/build/native_editor.min.js | awk '{print $1}')
+          test "$H1" = "$H2"
+          test "$H2" = "$ACCEPTED_AMD_SHA256"
+          node --check ../amd/build/native_editor.min.js
+          ! grep -a -q 'sourceMappingURL' ../amd/build/native_editor.min.js
+          ! grep -a -q '/root/digiera' ../amd/build/native_editor.min.js
+          echo PACKAGE_LOCK_SHA256=$LOCK
+          echo NATIVE_AMD_SHA256=$H2
+          echo DETERMINISTIC_TIPTAP_BUILD=PASS
+          echo TIPTAP_NETWORK_CI_ARTIFACT_HASH=PASS
+
+      - name: Runtime dependency audit
+        working-directory: public/local/digieranative/client
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm audit --omit=dev --audit-level=high
+          echo NPM_RUNTIME_AUDIT=PASS
+
+      - name: Security and remote-runtime dependency scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, sys
+          roots = [
+              Path('public/local/digieranative'),
+              Path('public/local/digieraoffice'),
+              Path('public/local/worksheetlibrary'),
+              Path('public/mod/worksheetgrader'),
+          ]
+          private_markers = (
+              'BEGIN RSA PRIVATE KEY',
+              'BEGIN OPENSSH PRIVATE KEY',
+              'BEGIN EC PRIVATE KEY',
+          )
+          credential = re.compile(r'''(?i)\b(password|secret|api[_-]?key)\b\s*[:=]\s*(["'])([^"'\r\n]{8,})\2''')
+          remote_runtime = [
+              re.compile(r'''(?i)<script[^>]+src=["']https?://'''),
+              re.compile(r'''(?i)<link[^>]+href=["']https?://'''),
+              re.compile(r'''(?i)\bimport\s+["']https?://'''),
+              re.compile(r'''(?i)\bfetch\s*\(\s*["']https?://'''),
+              re.compile(r'''(?i)url\(\s*["']?https?://'''),
+          ]
+          violations = []
+          allowed_ext = {'.php','.js','.mjs','.css','.py'}
+          for root in roots:
+              for path in root.rglob('*'):
+                  if not path.is_file() or path.suffix.lower() not in allowed_ext:
+                      continue
+                  if 'node_modules' in path.parts:
+                      continue
+                  text = path.read_text(encoding='utf-8', errors='ignore')
+                  if any(marker in text for marker in private_markers):
+                      violations.append(f'PRIVATE_KEY_LEAK {path}')
+                  if '/root/digiera' in text:
+                      violations.append(f'LOCAL_PATH_LEAK {path}')
+                  if credential.search(text):
+                      violations.append(f'LITERAL_CREDENTIAL_LEAK {path}')
+                  if any(pattern.search(text) for pattern in remote_runtime):
+                      violations.append(f'REMOTE_RUNTIME_DEPENDENCY {path}')
+          if violations:
+              print('\n'.join(violations))
+              sys.exit(1)
+          print('SOURCE_CONTENT_SCAN=PASS')
+          print('REMOTE_RUNTIME_CDN_SCAN=PASS')
+          PY
+
+      - name: Product delta and source safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHANGED=$(git diff --name-only "$MATERIALIZATION_BASE_SHA" "$CANONICAL_SHA")
+          printf '%s\n' "$CHANGED"
+          COUNT=$(printf '%s\n' "$CHANGED" | sed '/^$/d' | wc -l | tr -d ' ')
+          echo PRODUCT_CHANGED_FILES=$COUNT
+          test "$COUNT" = "17"
+          BAD=$(printf '%s\n' "$CHANGED" | grep -Ev '^(public/local/digieranative/|public/local/worksheetlibrary/|public/mod/worksheetgrader/)' || true)
+          test -z "$BAD"
+          echo PRODUCT_PATH_SCOPE=PASS
+          git diff --check "$MATERIALIZATION_BASE_SHA" "$CANONICAL_SHA" -- . ':!public/local/digieranative/amd/build/native_editor.min.js'
+          echo SOURCE_DIFF_CHECK=PASS
+          COREBAD=$(printf '%s\n' "$CHANGED" | grep -E '^(theme/remui/|public/theme/remui/|lib/|public/lib/|admin/|public/admin/)' || true)
+          test -z "$COREBAD"
+          echo REMUI_CORE_NAV_SAFETY=PASS
+
+      - name: Course Publisher backup restore safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f public/mod/worksheetgrader/backup/moodle2/backup_worksheetgrader_activity_task.class.php
+          test -f public/mod/worksheetgrader/backup/moodle2/restore_worksheetgrader_activity_task.class.php
+          grep -q 'FEATURE_BACKUP_MOODLE2' public/mod/worksheetgrader/lib.php
+          echo COURSE_PUBLISHER_BACKUP_RESTORE_CONTRACT=PASS
+
+      - name: Prove UI migration requires no DB upgrade
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHANGED=$(git diff --name-only "$MATERIALIZATION_BASE_SHA" "$CANONICAL_SHA")
+          DBDELTA=$(printf '%s\n' "$CHANGED" | grep -E '(^|/)(version\.php|db/install\.xml|db/upgrade\.php)$' || true)
+          if [ -n "$DBDELTA" ]; then
+            echo "$DBDELTA"
+            echo DB_UPGRADE_REQUIRED=YES
+            exit 1
+          fi
+          echo DB_UPGRADE_REQUIRED=NO
+
+      - name: Final Phase 2 verdict
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo FINAL_SOURCE_GATE=PASS
+          echo PHASE2_FINAL_SOURCE_GATE=PASS
