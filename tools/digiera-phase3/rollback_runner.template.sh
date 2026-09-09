@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-EXPECTED_SOURCE_SHA="__SOURCE_SHA__"
-EXPECTED_PACKAGE_SHA="__PACKAGE_SHA__"
-EXPECTED_MANIFEST_SHA="__MANIFEST_SHA__"
+BOUND_SOURCE_SHA="__SOURCE_SHA__"
+BOUND_PACKAGE_SHA="__PACKAGE_SHA__"
+BOUND_MANIFEST_SHA="__MANIFEST_SHA__"
 EXPECTED_HOST="vm-c47e0dd9"
-WEB02_IP="10.0.10.12"
-MOODLE_ROOT="/var/www/moodle/public"
+BOUND_WEB02_IP="10.0.10.12"
+BOUND_MOODLE_ROOT="/var/www/moodle/public"
 STATE_FILE="/root/digiera-tiptap-v1-deploy-state.env"
 
 say() { printf '%s\n' "$*"; }
@@ -15,9 +15,9 @@ die() { say "ERROR: $*" >&2; exit 1; }
 MODE="rollback"
 WORKDIR="$(pwd)"
 if [ "${1:-}" = "--self-check" ]; then
-    test "$EXPECTED_SOURCE_SHA" != "__SOURCE_SHA__"
-    test "$EXPECTED_PACKAGE_SHA" != "__PACKAGE_SHA__"
-    test "$EXPECTED_MANIFEST_SHA" != "__MANIFEST_SHA__"
+    test "$BOUND_SOURCE_SHA" != "__SOURCE_SHA__"
+    test "$BOUND_PACKAGE_SHA" != "__PACKAGE_SHA__"
+    test "$BOUND_MANIFEST_SHA" != "__MANIFEST_SHA__"
     say "ROLLBACK_RUNNER_BINDING=PASS"
     exit 0
 elif [ "${1:-}" = "--auto" ]; then
@@ -33,11 +33,11 @@ fi
 # shellcheck disable=SC1090
 source "$STATE_FILE"
 
-[ "$EXPECTED_SOURCE_SHA" = "${EXPECTED_SOURCE_SHA:-}" ] || die "State/source binding mismatch"
-[ "$EXPECTED_PACKAGE_SHA" = "${EXPECTED_PACKAGE_SHA:-}" ] || die "State/package binding mismatch"
-[ "$EXPECTED_MANIFEST_SHA" = "${EXPECTED_MANIFEST_SHA:-}" ] || die "State/manifest binding mismatch"
-[ "${WEB02_IP:-}" = "10.0.10.12" ] || die "Unexpected Web02 in state"
-[ "${MOODLE_ROOT:-}" = "/var/www/moodle/public" ] || die "Unexpected Moodle root in state"
+[ "$BOUND_SOURCE_SHA" = "${EXPECTED_SOURCE_SHA:-}" ] || die "State/source binding mismatch"
+[ "$BOUND_PACKAGE_SHA" = "${EXPECTED_PACKAGE_SHA:-}" ] || die "State/package binding mismatch"
+[ "$BOUND_MANIFEST_SHA" = "${EXPECTED_MANIFEST_SHA:-}" ] || die "State/manifest binding mismatch"
+[ "${WEB02_IP:-}" = "$BOUND_WEB02_IP" ] || die "Unexpected Web02 in state"
+[ "${MOODLE_ROOT:-}" = "$BOUND_MOODLE_ROOT" ] || die "Unexpected Moodle root in state"
 [ -f "${BACKUP_WEB01:-}" ] || die "Missing Web01 backup"
 ssh -o BatchMode=yes -o ConnectTimeout=8 "root@$WEB02_IP" "test -f '${BACKUP_WEB02:-}'" || die "Missing Web02 backup"
 
@@ -79,9 +79,9 @@ trap - EXIT
 
 umask 077
 {
-    printf 'EXPECTED_SOURCE_SHA=%q\n' "$EXPECTED_SOURCE_SHA"
-    printf 'EXPECTED_PACKAGE_SHA=%q\n' "$EXPECTED_PACKAGE_SHA"
-    printf 'EXPECTED_MANIFEST_SHA=%q\n' "$EXPECTED_MANIFEST_SHA"
+    printf 'EXPECTED_SOURCE_SHA=%q\n' "$BOUND_SOURCE_SHA"
+    printf 'EXPECTED_PACKAGE_SHA=%q\n' "$BOUND_PACKAGE_SHA"
+    printf 'EXPECTED_MANIFEST_SHA=%q\n' "$BOUND_MANIFEST_SHA"
     printf 'WEB02_IP=%q\n' "$WEB02_IP"
     printf 'MOODLE_ROOT=%q\n' "$MOODLE_ROOT"
     printf 'RUN_ID=%q\n' "${RUN_ID:-unknown}"
@@ -93,6 +93,6 @@ umask 077
 } > "$STATE_FILE"
 
 say "===== ROLLBACK SUMMARY ====="
-say "SOURCE_COMMIT_SHA=$EXPECTED_SOURCE_SHA"
-say "PACKAGE_SHA256=$EXPECTED_PACKAGE_SHA"
+say "SOURCE_COMMIT_SHA=$BOUND_SOURCE_SHA"
+say "PACKAGE_SHA256=$BOUND_PACKAGE_SHA"
 say "ROLLBACK_STATUS=PASS"
