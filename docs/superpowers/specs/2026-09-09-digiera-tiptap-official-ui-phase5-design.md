@@ -23,10 +23,10 @@ No Moodle core or RemUI code is modified. No runtime CDN is allowed. All editor 
 
 ```text
 Moodle local_digieranative
-  -> local bundled editor application
+  -> local bundled React editor application
        -> Tiptap Editor 3.x
             -> StarterKit / official extensions
-            -> official-style Tiptap editor controls
+            -> official Tiptap Simple Editor UI patterns/components
             -> DIGIERA worksheet extensions
                  - question
                  - short answer
@@ -50,18 +50,19 @@ local_worksheetlibrary
 
 ### 4.1 Generic Tiptap behavior
 
-The replacement editor surface must provide working, selection-aware controls for the generic authoring behaviors we need in V1:
+The replacement editor surface must provide working, selection-aware controls for the generic authoring behaviors required in Phase 5:
 
 - undo / redo
 - bold / italic / underline / strike
 - paragraph and heading selection
 - bullet list / ordered list
 - text alignment
-- hard break and normal paragraph semantics
+- normal paragraph and hard-break semantics
 - keyboard shortcuts supplied by Tiptap/ProseMirror
-- link editing if supported by the selected official UI component set
+- link insert/edit/remove
 - image insertion hook wired to DIGIERA assets
-- search/replace if the official component can be included without expanding Phase 5 into a separate subsystem
+
+Search/replace is explicitly deferred from this Phase 5 migration. It may be added later without blocking completion of the approved 5-phase scope.
 
 Controls must reflect active selection state where applicable. We must not keep visible placeholder controls that have no functional implementation.
 
@@ -77,7 +78,7 @@ Preserve and integrate existing custom worksheet nodes/extensions:
 - mathBlock / mathInline
 - teacher-note / rubric / page-break style native nodes already supported by the schema where applicable
 
-DIGIERA-specific controls may be presented as an additional toolbar group/menu adjacent to the official Tiptap controls. They do not need to imitate Microsoft Word if doing so would weaken usability or maintainability.
+DIGIERA-specific controls are presented as an additional toolbar group/menu adjacent to the official Tiptap controls. They do not need to imitate Microsoft Word if doing so would weaken usability or maintainability.
 
 ### 4.3 Save behavior
 
@@ -97,7 +98,7 @@ Required normalization:
 
 - normal Enter creates a paragraph boundary
 - Shift+Enter creates a `hardBreak`
-- multiline plain-text paste becomes Tiptap block structure (paragraphs and/or hard breaks according to parser rules), not raw newline characters inside one text node
+- multiline plain-text paste becomes Tiptap block structure, with each non-empty newline-delimited line becoming a paragraph and blank lines preserved as empty paragraphs
 - HTML paste continues through sanitization and Tiptap/ProseMirror parsing
 
 Regression fixture:
@@ -108,7 +109,7 @@ PHASE 5 TEST
 Dòng kiểm tra autosave.
 ```
 
-The editor, persisted JSON, preview, and reopened editor must all preserve the intended three-line structure.
+The editor, persisted JSON, preview, and reopened editor must all preserve the intended three-paragraph structure.
 
 ## 6. Preview and publish correctness
 
@@ -117,8 +118,8 @@ The current preview strategy of copying `canvas.innerHTML` is removed as the aut
 Preview must be generated from the same structured document used by the editor:
 
 1. obtain current Tiptap JSON
-2. convert to canonical Native JSON if needed
-3. render preview using the same node semantics / renderer contract
+2. convert to canonical Native JSON
+3. render preview from Native JSON using the existing DIGIERA semantic renderer contract
 4. never depend on editor-only whitespace CSS to preserve document structure
 
 Expected invariant:
@@ -133,7 +134,7 @@ Visual scaling may differ between editor and preview, but paragraphs, headings, 
 
 The existing Rollup AMD build remains the Moodle delivery mechanism.
 
-If official Tiptap UI components require React, React/ReactDOM and required build support are bundled locally into `local_digieranative` and emitted as the existing AMD artifact. No external CDN or remote runtime dependency is introduced.
+The replacement editor uses React/ReactDOM locally with official Tiptap UI component patterns. React/ReactDOM, Tiptap dependencies, and the required Rollup build support are bundled into `local_digieranative` and emitted as the existing Moodle AMD artifact. No external CDN or remote runtime dependency is introduced.
 
 The output must remain loadable through Moodle AMD on Moodle 5.1 / PHP 8.3 / Edwiser RemUI 5.2.2.
 
@@ -147,8 +148,8 @@ Primary expected source changes:
 - `public/local/digieranative/client/package-lock.json`
 - `public/local/digieranative/client/rollup.config.js`
 - `public/local/digieranative/client/src/editor.js`
-- `public/local/digieranative/client/src/ribbon.js` — removed from primary runtime or reduced to compatibility shim
-- new editor UI component files under `public/local/digieranative/client/src/`
+- `public/local/digieranative/client/src/ribbon.js` — removed from primary runtime or retained only as a compatibility shim with no visible placeholder controls
+- new React/Tiptap UI component files under `public/local/digieranative/client/src/`
 - `public/local/digieranative/client/src/paste.js`
 - `public/local/digieranative/styles.css`
 - generated `public/local/digieranative/amd/build/native_editor.min.js`
@@ -158,7 +159,7 @@ Primary expected source changes:
 
 No changes are planned to Moodle core, `theme/remui`, or unrelated plugins.
 
-No DB schema migration is planned. `DB_UPGRADE_REQUIRED=NO` remains a release gate unless implementation proves otherwise, in which case deployment must stop and the design must be revisited.
+No DB schema migration is planned. `DB_UPGRADE_REQUIRED=NO` is a hard release gate. If implementation proves a DB migration is necessary, deployment stops and this design must be revised before any production action.
 
 ## 9. Compatibility constraints
 
@@ -179,11 +180,12 @@ Implementation starts with failing tests for the observed defects and target beh
 
 Minimum RED tests before implementation:
 
-1. multiline plain-text paste produces multiple semantic blocks, not one raw-newline text node
-2. preview is generated from structured JSON rather than `canvas.innerHTML`
-3. placeholder Ribbon controls are not present in the final editor UI
+1. multiline plain-text paste produces multiple paragraph nodes, not one raw-newline text node
+2. preview is generated from structured Native JSON rather than `canvas.innerHTML`
+3. visible dead/placeholder Ribbon controls are absent from the final editor UI
 4. selection-aware formatting controls invoke Tiptap commands and reflect active state
 5. existing DIGIERA extension nodes still serialize/deserialize through the Native adapter
+6. legacy Native documents created before this migration still mount successfully
 
 GREEN gate requires:
 
