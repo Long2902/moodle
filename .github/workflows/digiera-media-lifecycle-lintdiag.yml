@@ -1,0 +1,44 @@
+name: DIGIERA Media lifecycle lint diagnostic
+
+on:
+  push:
+    branches:
+      - feature/digiera-media-v1-rc1-lifecycle
+    paths:
+      - '.github/workflows/digiera-media-lifecycle-lintdiag.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout lifecycle branch
+        uses: actions/checkout@v4
+
+      - name: Install Node dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Capture TinyMCE ESLint JSON
+        shell: bash
+        run: |
+          set +e
+          npx eslint \
+            public/lib/editor/tiny/plugins/digieramedia/amd/src/ui.js \
+            --format json \
+            > lifecycle-eslint.json
+          rc=$?
+          echo "ESLINT_EXIT_CODE=$rc"
+          cat lifecycle-eslint.json
+          exit 0
+
+      - name: Upload lint diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: DIGIERA_MEDIA_LIFECYCLE_ESLINT
+          path: lifecycle-eslint.json
+          if-no-files-found: error
+          retention-days: 2
