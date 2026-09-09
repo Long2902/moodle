@@ -36,11 +36,12 @@ Therefore this batch should not introduce a second lifecycle table or a second m
 Trash is a soft-delete operation only.
 
 - Set Media status to `TRASHED`.
+- Save the current visibility in `local_digieramedia_trash.previousvisibility`, then set Media visibility to `PRIVATE` while it is trashed. This prevents a formerly SHARED/COURSE item from appearing in other users' Trash views while keeping the owner/Admin able to manage it.
 - Insert/update one row in `local_digieramedia_trash` with actor, timestamp, reason and previous visibility.
 - Do **not** delete any R2 object.
 - Do **not** delete or rewrite references.
 - Do **not** create a new Media UUID.
-- Remove the item from the normal Library tab and show it in the Trash tab.
+- Remove the item from the normal Library tab and show it in the Trash tab only to callers allowed by owner/system permissions.
 - Block creation of new references to a trashed Media.
 - Block Replace/version-management mutations while Media is trashed.
 
@@ -60,14 +61,16 @@ Restore:
 - Set Media status back to `ACTIVE`.
 - Restore `visibility` from `local_digieramedia_trash.previousvisibility`.
 - Keep the same Media UUID, Version rows, R2 object keys, currentversionid and references.
-- Remove or close the active trash metadata record so a later trash cycle is unambiguous.
+- Remove the active trash metadata row after the restore transaction commits so a later trash cycle is unambiguous.
 - Existing references continue rendering without marker changes.
 
 ### TRASHED → PURGING → PURGED
 
 Permanent delete means physical object deletion from R2 while keeping minimal DB tombstones for audit/referential integrity.
 
-Normal purge is rejected when active/draft references still exist.
+For lifecycle safety, `ACTIVE` and `DRAFT` references count as live references. `STALE` and `UNRESOLVED` do not block normal purge.
+
+Normal purge is rejected when live references still exist.
 
 If there are zero live references:
 
@@ -78,7 +81,8 @@ If there are zero live references:
 5. After each successful physical delete, mark Version `PURGED` and set `timepurged`.
 6. After all versions are physically absent, set Media status `PURGED`.
 7. Keep Media/Version IDs and UUID metadata as tombstones; do not reuse UUIDs.
-8. Write audit metadata without secrets.
+8. Keep audit/trash metadata sufficient to explain who initiated the purge and when.
+9. Write audit metadata without secrets.
 
 If one R2 delete fails, Media remains `PURGING`; completed version deletions remain `PURGED`; retry continues idempotently from the remaining versions.
 
@@ -112,6 +116,8 @@ A new read endpoint returns visible references for one Media with:
 - a safe view/edit URL when Moodle can resolve one,
 - created/modified time.
 
+The panel reports `ACTIVE` + `DRAFT` as the live-use count used by lifecycle safety.
+
 Permission rule:
 
 - Caller requires `local/digieramedia:viewusage`.
@@ -132,6 +138,8 @@ Add AJAX services:
 - `local_digieramedia_purge_media` — permanent R2 purge; accepts `force` boolean but enforces server-side capability and reference count.
 
 Existing `search_media` remains the list API and keeps the `trash` tab. It may be extended with only the capability fields needed by the UI; destructive authorization remains server-side in the lifecycle endpoints.
+
+`get_media_versions` is extended to permit read-only version history for `TRASHED` Media when the caller has the required management/view permission. Replace/current-version mutation remains ACTIVE-only.
 
 ## Server architecture
 
@@ -210,11 +218,12 @@ Show:
 
 - badge `Trong thùng rác`,
 - deleted date/user/reason when available,
+- read-only version history,
 - live usage count,
 - `Khôi phục` when permitted,
 - `Xóa vĩnh viễn` only when permitted.
 
-Version replacement and new-reference controls are disabled for TRASHED Media.
+Version replacement, Follow/Pin mutation and new-reference controls are disabled for TRASHED Media.
 
 ### Permanent delete confirmation
 
@@ -235,7 +244,7 @@ The destructive button must be visually distinct and require an explicit second 
 - Media PURGING/PURGED: render unavailable.
 - Reference UNRESOLVED: render unavailable.
 
-New reference creation and replacement continue to require Media ACTIVE.
+New reference creation, reference version mutation and replacement continue to require Media ACTIVE.
 
 ## Audit
 
@@ -264,11 +273,11 @@ No new table is expected because the current schema already includes Trash, stat
 
 Automated RED→GREEN coverage before deployment:
 
-1. Trash ACTIVE Media -> TRASHED and trash metadata saved; R2 delete not called.
+1. Trash ACTIVE Media -> TRASHED + PRIVATE and trash metadata saves previous visibility; R2 delete not called.
 2. Existing reference to TRASHED Media still renders.
-3. New reference to TRASHED Media is rejected.
+3. New reference and version mutation against TRASHED Media are rejected.
 4. Restore -> ACTIVE, previous visibility restored, same Media UUID/current version.
-5. Usage endpoint returns only accessible locations and correct live count.
+5. Usage endpoint returns only accessible locations and correct ACTIVE+DRAFT live count.
 6. Normal purge with live refs is rejected and R2 delete is not called.
 7. Purge with zero refs deletes every physical version, marks Versions/Media PURGED and is idempotent.
 8. Partial R2 failure leaves Media PURGING and retry deletes only remaining versions.
@@ -303,10 +312,10 @@ Use expendable RC1 test Media only.
 
 1. Create/choose a Media with one live reference.
 2. Usage panel shows the correct location/count.
-3. Trash it: Library loses it, Trash shows it, existing course content still renders.
+3. Trash it: Library loses it, Trash shows it only to the appropriate owner/Admin, existing course content still renders.
 4. Attempt to create a new reference to the trashed Media: rejected/not offered.
-5. Restore it: returns to Library with same UUID/version and existing content unchanged.
-6. Trash an unused test Media, permanently delete it, verify R2 object no longer exists and UI shows it as purged/removed from Trash.
+5. Restore it: returns to Library with its previous visibility, same UUID/version and existing content unchanged.
+6. Trash an unused test Media, permanently delete it, verify R2 object no longer exists and UI removes it from actionable Trash results while DB retains a PURGED tombstone.
 7. For force-purge acceptance, use a separate disposable Media/reference: confirm warning count, purge, verify marker remains but renderer shows `Học liệu hiện không khả dụng.`
 8. Verify no unrelated PDF/image/video/audio/Office upload/versioning regressions.
 
