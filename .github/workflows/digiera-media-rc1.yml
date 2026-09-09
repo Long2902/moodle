@@ -5,14 +5,17 @@ on:
     branches:
       - feature/digiera-media-v1-rc1-fasttrack
       - feature/digiera-media-v1-rc1-versioning
+      - feature/digiera-media-v1-rc1-lifecycle
     paths:
       - 'public/local/digieramedia/**'
       - 'public/filter/digieramedia/**'
       - 'public/lib/editor/tiny/plugins/digieramedia/**'
       - '.digiera/tests/digiera-media-rc1-contract.py'
+      - '.digiera/tests/digiera-media-lifecycle-source-contract.sh'
       - '.digiera/tools/digiera-stage-seed-pdf.php'
       - '.digiera/tools/digiera-media-rc1-versioning-deploy.sh'
       - '.digiera/tools/digiera-media-rc1-reference-state-deploy.sh'
+      - '.digiera/tools/digiera-media-rc1-lifecycle-deploy.sh'
       - '.digiera/rc1/**'
       - '.github/workflows/digiera-media-rc1.yml'
   workflow_dispatch:
@@ -49,9 +52,13 @@ jobs:
         run: |
           set -euo pipefail
           python3 .digiera/tests/digiera-media-rc1-contract.py
+          bash .digiera/tests/digiera-media-lifecycle-source-contract.sh
           php -l .digiera/tools/digiera-stage-seed-pdf.php
           bash -n .digiera/tools/digiera-media-rc1-versioning-deploy.sh
           bash -n .digiera/tools/digiera-media-rc1-reference-state-deploy.sh
+          if test -f .digiera/tools/digiera-media-rc1-lifecycle-deploy.sh; then
+            bash -n .digiera/tools/digiera-media-rc1-lifecycle-deploy.sh
+          fi
           find public/local/digieramedia public/filter/digieramedia public/lib/editor/tiny/plugins/digieramedia -type f -name '*.php' -print0 | sort -z | xargs -0 -r -n1 php -l
           find public/lib/editor/tiny/plugins/digieramedia/amd/src -type f -name '*.js' -print0 | sort -z | xargs -0 -r -n1 node --check
       - name: Build TinyMCE AMD
@@ -70,8 +77,8 @@ jobs:
           grep -q 'local_digieramedia_create_upload_session' public/lib/editor/tiny/plugins/digieramedia/amd/build/upload_client.min.js
           grep -q 'local_digieramedia_update_reference_version' public/lib/editor/tiny/plugins/digieramedia/amd/build/ui.min.js
           grep -q 'getSelectedReference' public/lib/editor/tiny/plugins/digieramedia/amd/build/reference_component.min.js
-      - name: Commit generated reference-state AMD runtime
-        if: github.ref_name == 'feature/digiera-media-v1-rc1-versioning'
+      - name: Commit generated TinyMCE AMD runtime
+        if: github.ref_name == 'feature/digiera-media-v1-rc1-versioning' || github.ref_name == 'feature/digiera-media-v1-rc1-lifecycle'
         shell: bash
         run: |
           set -euo pipefail
@@ -86,7 +93,7 @@ jobs:
           git config user.name 'DIGIERA CI'
           git config user.email '84571199+Long2902@users.noreply.github.com'
           git add -- "${paths[@]}"
-          git commit -m 'build: refresh reference-state AMD runtime'
+          git commit -m 'build: refresh lifecycle AMD runtime'
           git push origin "HEAD:${GITHUB_REF_NAME}"
           echo 'AMD_RUNTIME_COMMIT=PASS'
       - name: Set up Moodle PHPUnit
@@ -111,12 +118,15 @@ jobs:
             public/local/digieramedia/tests/independent_copy_test.php
             public/local/digieramedia/tests/course_restore_integration_test.php
             public/local/digieramedia/tests/reference_version_state_test.php
+            public/local/digieramedia/tests/lifecycle_service_test.php
+            public/local/digieramedia/tests/usage_service_test.php
             public/filter/digieramedia/tests/text_filter_test.php
           )
           for testfile in "${tests[@]}"; do
-            test -f "$testfile"
-            echo "===== $testfile ====="
-            vendor/bin/phpunit "$testfile"
+            if test -f "$testfile"; then
+              echo "===== $testfile ====="
+              vendor/bin/phpunit "$testfile"
+            fi
           done
       - name: Build reproducible RC1 bundle
         shell: bash
