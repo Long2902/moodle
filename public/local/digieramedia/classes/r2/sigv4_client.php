@@ -127,7 +127,51 @@ final class sigv4_client implements client_interface {
     }
 
     public function delete_object(string $bucket, string $key): void {
-        throw new \coding_exception('DIGIERA R2 delete is outside the single-PUT RC batch.');
+        $this->assert_server_target($bucket, $key);
+        $time = $this->now();
+        $amzdate = gmdate('Ymd\THis\Z', $time);
+        $datestamp = gmdate('Ymd', $time);
+        $payloadhash = hash('sha256', '');
+        $host = $this->endpoint_host();
+        $uri = $this->canonical_uri($bucket, $key);
+        $signedheaders = 'host;x-amz-content-sha256;x-amz-date';
+        $canonicalheaders = 'host:' . $host . "\n"
+            . 'x-amz-content-sha256:' . $payloadhash . "\n"
+            . 'x-amz-date:' . $amzdate . "\n";
+        $canonicalrequest = "DELETE\n{$uri}\n\n{$canonicalheaders}\n{$signedheaders}\n{$payloadhash}";
+        $scope = $datestamp . '/' . $this->config->region() . '/s3/aws4_request';
+        $stringtosign = "AWS4-HMAC-SHA256\n{$amzdate}\n{$scope}\n" . hash('sha256', $canonicalrequest);
+        $signature = hash_hmac('sha256', $stringtosign, $this->signing_key($datestamp));
+        $authorization = 'AWS4-HMAC-SHA256 Credential=' . $this->config->access_key_id() . '/' . $scope
+            . ', SignedHeaders=' . $signedheaders . ', Signature=' . $signature;
+
+        if (!function_exists('curl_init')) {
+            throw new \runtime_exception('R2 transport unavailable: PHP cURL extension is missing.');
+        }
+
+        $ch = curl_init($this->config->endpoint() . $uri);
+        curl_setopt_array($ch, [
+            CURLOPT_CUSTOMREQUEST => 'DELETE',
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTPHEADER => [
+                'Host: ' . $host,
+                'x-amz-content-sha256: ' . $payloadhash,
+                'x-amz-date: ' . $amzdate,
+                'Authorization: ' . $authorization,
+            ],
+        ]);
+        $result = curl_exec($ch);
+        $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($result !== false && (($status >= 200 && $status < 300) || $status === 404)) {
+            return;
+        }
+        $suffix = $error !== '' ? ' transport=' . clean_param($error, PARAM_TEXT) : '';
+        throw new \runtime_exception('R2 DELETE failed with HTTP ' . $status . $suffix);
     }
 
     public function copy_object(string $sourcebucket, string $sourcekey, string $targetbucket, string $targetkey): array {
