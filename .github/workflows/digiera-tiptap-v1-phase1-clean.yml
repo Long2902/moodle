@@ -1,0 +1,183 @@
+name: DIGIERA Tiptap V1 Phase1 Canonical-Base Materialization
+
+on:
+  push:
+    branches:
+      - digiera/tiptap-v1-phase1-clean
+    paths:
+      - .github/workflows/digiera-tiptap-v1-phase1-clean.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout canonical-based phase branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Recover verified patch inputs from isolated CI branch
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin digiera/tiptap-v1-ci
+          git show FETCH_HEAD:tools/digiera-tiptap-v1.patch.gz > /tmp/digiera-tiptap-v1.patch.gz
+          git show FETCH_HEAD:tools/digiera-tiptap-run6-fix.patch > /tmp/digiera-tiptap-run6-fix.patch
+          test -s /tmp/digiera-tiptap-v1.patch.gz
+          test -s /tmp/digiera-tiptap-run6-fix.patch
+          echo PATCH_INPUT_RECOVERY=PASS
+
+      - name: Apply verified V1 patches to canonical base
+        run: |
+          set -euo pipefail
+          gzip -dc /tmp/digiera-tiptap-v1.patch.gz > /tmp/digiera-tiptap-v1.patch
+          git apply --check /tmp/digiera-tiptap-v1.patch
+          git apply /tmp/digiera-tiptap-v1.patch
+          git apply --check /tmp/digiera-tiptap-run6-fix.patch
+          git apply /tmp/digiera-tiptap-run6-fix.patch
+          echo TIPTAP_V1_PATCH_APPLY=PASS
+
+      - name: Normalize handwritten patch whitespace
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib, re, subprocess
+          generated = 'public/local/digieranative/amd/build/native_editor.min.js'
+          allowed = ('public/local/digieranative/', 'public/local/worksheetlibrary/', 'public/mod/worksheetgrader/')
+          p = subprocess.run(['git','diff','--check','--','.',f':!{generated}'], text=True, capture_output=True)
+          output = (p.stdout or '') + (p.stderr or '')
+          paths = set()
+          for line in output.splitlines():
+              m = re.match(r'^(.+?):\d+: (?:trailing whitespace\.|new blank line at EOF\.)$', line)
+              if not m:
+                  continue
+              name = m.group(1)
+              if not name.startswith(allowed):
+                  raise SystemExit(f'OUT_OF_SCOPE_WHITESPACE={name}')
+              paths.add(name)
+          for name in sorted(paths):
+              path = pathlib.Path(name)
+              text = path.read_text(encoding='utf-8')
+              text = re.sub(r'[ \t]+(?=\r?\n)', '', text)
+              text = text.rstrip(' \t\r\n') + '\n'
+              path.write_text(text, encoding='utf-8', newline='')
+              print(f'NORMALIZED_WHITESPACE={name}')
+          subprocess.run(['git','diff','--check','--','.',f':!{generated}'], check=True)
+          print(f'NORMALIZED_FILE_COUNT={len(paths)}')
+          print('SOURCE_DIFF_CHECK_EXCLUDING_GENERATED=PASS')
+          PY
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: public/local/digieranative/client/package-lock.json
+
+      - name: Regenerate accepted Tiptap lock
+        working-directory: public/local/digieranative/client
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Clean install
+        working-directory: public/local/digieranative/client
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Native tests
+        working-directory: public/local/digieranative/client
+        run: npm test
+
+      - name: Standalone and static contracts
+        run: |
+          set -euo pipefail
+          node public/local/digieranative/client/tests/tiptap-adapter-standalone.mjs
+          python3 public/local/digieranative/tests/tiptap_hybrid_static_contract.py
+
+      - name: JS syntax
+        run: |
+          set -euo pipefail
+          node --check public/local/digieranative/client/src/editor.js
+          node --check public/local/digieranative/client/src/ribbon.js
+          node --check public/local/digieranative/client/src/tiptap_extensions.js
+          node --check public/local/digieranative/client/src/paste.js
+          node --check public/local/worksheetlibrary/amd/src/native_editor.js
+          node --check public/mod/worksheetgrader/amd/src/native_attempt.js
+          echo JS_SYNTAX=PASS
+
+      - name: Deterministic Rollup build
+        working-directory: public/local/digieranative/client
+        run: |
+          set -euo pipefail
+          npm run build
+          cp ../amd/build/native_editor.min.js /tmp/native_editor.min.js.first
+          sha256sum ../amd/build/native_editor.min.js | tee /tmp/build1.sha
+          npm run build
+          cmp /tmp/native_editor.min.js.first ../amd/build/native_editor.min.js
+          sha256sum ../amd/build/native_editor.min.js | tee /tmp/build2.sha
+          echo DETERMINISTIC_TIPTAP_BUILD=PASS
+
+      - name: Verify accepted hashes
+        run: |
+          set -euo pipefail
+          LOCK=$(sha256sum public/local/digieranative/client/package-lock.json | awk '{print $1}')
+          AMD=$(sha256sum public/local/digieranative/amd/build/native_editor.min.js | awk '{print $1}')
+          echo PACKAGE_LOCK_SHA256=$LOCK
+          echo NATIVE_AMD_SHA256=$AMD
+          test "$LOCK" = "bd28c54a123ae1da0895c60dcc34db8710732e00cb8dffc9c6280810aab7b473"
+          test "$AMD" = "448f5386ae4213ecf0695c6a7591a3578a90b1c05db748b89e507fff9c7528f7"
+          echo ACCEPTED_PRODUCT_HASHES=PASS
+
+      - name: Remove build-only dependencies
+        run: |
+          set -euo pipefail
+          test -d public/local/digieranative/client/node_modules
+          rm -rf public/local/digieranative/client/node_modules
+          test ! -e public/local/digieranative/client/node_modules
+          echo BUILD_ONLY_DEPENDENCIES_REMOVED=PASS
+
+      - name: Stage exact product delta
+        run: |
+          set -euo pipefail
+          git add public/local/digieranative public/local/worksheetlibrary public/mod/worksheetgrader
+          echo '===== STAGED PRODUCT PATHS ====='
+          git diff --cached --name-only
+          COUNT=$(git diff --cached --name-only | wc -l | tr -d ' ')
+          echo PRODUCT_CHANGED_FILES=$COUNT
+          test "$COUNT" -gt 0
+          echo PRODUCT_FILE_COUNT_RECONCILED=PASS
+
+      - name: Verify product path scope
+        run: |
+          set -euo pipefail
+          BAD=$(git diff --cached --name-only | grep -Ev '^(public/local/digieranative/|public/local/worksheetlibrary/|public/mod/worksheetgrader/)' || true)
+          test -z "$BAD"
+          echo PRODUCT_PATH_SCOPE=PASS
+
+      - name: Verify handwritten source diff
+        run: |
+          set -euo pipefail
+          git diff --cached --check -- . ':!public/local/digieranative/amd/build/native_editor.min.js'
+          echo SOURCE_DIFF_CHECK_EXCLUDING_GENERATED=PASS
+
+      - name: Verify RemUI and Moodle core safety
+        run: |
+          set -euo pipefail
+          BAD=$(git diff --cached --name-only | grep -E '^(theme/remui/|public/theme/remui/|lib/|public/lib/|admin/|public/admin/)' || true)
+          test -z "$BAD"
+          echo REMUI_CORE_NAV_SAFETY=PASS
+
+      - name: Commit verified product source locally
+        run: |
+          set -euo pipefail
+          git config user.name 'DIGIERA CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'feat(tiptap): materialize verified V1 product source [skip ci]'
+          echo LOCAL_PRODUCT_COMMIT=$(git rev-parse HEAD)
+          echo LOCAL_PRODUCT_COMMIT=PASS
+
+      - name: Push materialized product commit to clean phase branch
+        run: |
+          set -euo pipefail
+          git push origin HEAD:digiera/tiptap-v1-phase1-clean
+          echo PHASE1_CLEAN_PRODUCT_PUSH=PASS
