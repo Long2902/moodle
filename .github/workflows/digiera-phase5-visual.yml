@@ -1,0 +1,29 @@
+name: DIGIERA Phase5 Visual
+
+on:
+  push:
+    branches:
+      - digiera/tiptap-v1-phase5-visual
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: PHP lint visual surface
+        run: |
+          php -l public/local/worksheetlibrary/index.php
+          php -l public/local/worksheetlibrary/detail.php
+      - name: UI V1 runtime contract
+        run: python3 public/local/worksheetlibrary/tests/ui_v1_runtime_contract.py
+      - name: JS syntax
+        run: node --check public/local/worksheetlibrary/amd/src/browser.js
+      - name: Scoped CSS safety
+        run: |
+          ! grep -Eq '(^|[,{[:space:]])(body|html|#page)([,{[:space:]:.#]|$)' public/local/worksheetlibrary/styles.css
+          ! grep -RE 'cdn\.tailwindcss\.com|cdnjs\.cloudflare\.com|fonts\.googleapis\.com' public/local/worksheetlibrary/index.php public/local/worksheetlibrary/detail.php public/local/worksheetlibrary/styles.css public/local/worksheetlibrary/amd/src/browser.js
+          echo PHASE5_SCOPED_UI_SAFETY=PASS
