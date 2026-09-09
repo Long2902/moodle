@@ -63,35 +63,35 @@ Final RC1 fast-track run `34320076725` completed SUCCESS:
 - reproducible RC1 bundle + archive verification: PASS
 - artifact upload: PASS
 
-## Deployment
+## Deployment incident and recovery
 
-Two-node incremental helper:
+The first incremental deploy exposed a production-only Moodle upgrade entrypoint bug: `db/upgrade.php` declared `namespace local_digieramedia`, so Moodle could not find the required global function `xmldb_local_digieramedia_upgrade()`.
 
-`.digiera/tools/digiera-media-rc1-reference-state-deploy.sh`
+A regression contract reproduced the issue, then the upgrade entrypoint was fixed at product commit:
 
-Helper commit:
+`e67278ffdddb61ff7b63108c01c113096485fd4f`
 
-`e4d914c2e3d22b7d3ede5ac56aac722b8c429a1a`
+RC1 fast-track workflow run `34320824704` completed SUCCESS after this fix, including source gate, AMD build, Moodle PHPUnit/runtime suite, reproducible bundle and archive verification.
 
-Pinned product commit:
+Recovery helper:
 
-`0586bfc069466adb74fca82dbfef210bf3a3d1ba`
+`.digiera/tools/digiera-media-rc1-upgrade-entrypoint-recovery.sh`
 
-Expected DB/plugin versions after deploy:
+Recovery helper commit:
 
-- `local_digieramedia = 2026090901`
-- `tiny_digieramedia = 2026090901`
-- `local_digieramedia_update_reference_version` registered
+`0696ebdcdb3696d7af07675256c9e219c79b91c2`
 
-## Browser acceptance after deploy
+## Browser acceptance
 
-1. Edit content containing an existing PINNED DIGIERA component.
-2. Click/select that `Học liệu DIGIERA: ...` component in TinyMCE first.
-3. Open DIGIERA Media from the toolbar.
-4. Same Media must be selected automatically.
-5. `Ghim một phiên bản` must be checked and saved pinned version selected.
-6. Save button must read `Cập nhật reference`.
-7. Change to FOLLOW_CURRENT, update, reopen same component: Follow must be checked.
-8. Change back to PINNED v1, update, reopen same component: Pin v1 must be checked.
-9. Source marker UUID must remain the same; no duplicate marker/reference.
-10. Opening DIGIERA with no existing component selected must still default to FOLLOW_CURRENT for a new insertion.
+User browser verification on 2026-09-09 confirms the original UI-state defect is resolved:
+
+- Existing DIGIERA component is selected in TinyMCE before opening the modal.
+- The same Media is reopened automatically.
+- `Ghim một phiên bản` is restored as selected for an existing pinned reference.
+- The saved pinned version (observed as `v1`) is restored in the version dropdown.
+- Version history still shows `v3` current with `v2` and `v1` retained.
+- Save action is `Cập nhật reference`, confirming edit-existing-reference semantics rather than creating a new reference.
+
+Observed browser state therefore verifies the authoritative persisted reference version state now round-trips back into the modal UI.
+
+Remaining acceptance checks for this feature family are optional regression confirmations: switch existing reference PINNED -> FOLLOW_CURRENT -> reopen, then FOLLOW_CURRENT -> PINNED v1 -> reopen, while keeping the marker UUID unchanged.
