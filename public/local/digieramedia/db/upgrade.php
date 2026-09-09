@@ -31,5 +31,9 @@ function xmldb_local_digieramedia_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026090901, 'local', 'digieramedia');
     }
 
+    if ($oldversion < 2026090902) {
+        upgrade_plugin_savepoint(true, 2026090902, 'local', 'digieramedia');
+    }
+
     return true;
 }
