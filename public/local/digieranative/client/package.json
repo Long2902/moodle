@@ -23,7 +23,10 @@
     "prosemirror-schema-list": "1.5.1",
     "prosemirror-state": "1.4.4",
     "prosemirror-tables": "1.8.5",
-    "prosemirror-view": "1.42.3"
+    "prosemirror-view": "1.42.3",
+    "@tiptap/core": "3.31.3",
+    "@tiptap/starter-kit": "3.31.3",
+    "@tiptap/extension-text-align": "3.31.3"
   },
   "devDependencies": {
     "@rollup/plugin-node-resolve": "16.0.3",

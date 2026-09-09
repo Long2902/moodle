@@ -239,6 +239,7 @@ export function sanitizePastedHtml(
 export function parsePastedHtml(
     html,
     document,
+    targetSchema = schema,
 ) {
     const root =
         sanitizePastedHtml(
@@ -247,7 +248,7 @@ export function parsePastedHtml(
         );
 
     return ProseMirrorDOMParser
-        .fromSchema(schema)
+        .fromSchema(targetSchema)
         .parseSlice(
             root,
             {
@@ -282,6 +283,7 @@ export function createPasteHandler() {
                 parsePastedHtml(
                     html,
                     document,
+                    view.state.schema,
                 );
 
             view.dispatch(
