@@ -84,6 +84,7 @@ jobs:
             public/local/digieramedia/tests/reference_remapper_test.php
             public/local/digieramedia/tests/independent_copy_test.php
             public/local/digieramedia/tests/course_restore_integration_test.php
+            public/local/digieramedia/tests/reference_version_state_test.php
             public/filter/digieramedia/tests/text_filter_test.php
           )
           for testfile in "${tests[@]}"; do
