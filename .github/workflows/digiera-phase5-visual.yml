@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: digiera-phase5-visual
+  cancel-in-progress: true
+
 jobs:
   visual:
     runs-on: ubuntu-latest
@@ -20,8 +24,12 @@ jobs:
           php -l public/local/worksheetlibrary/detail.php
       - name: UI V1 runtime contract
         run: python3 public/local/worksheetlibrary/tests/ui_v1_runtime_contract.py
-      - name: JS syntax
-        run: node --check public/local/worksheetlibrary/amd/src/browser.js
+      - name: JS syntax and AMD parity
+        run: |
+          node --check public/local/worksheetlibrary/amd/src/browser.js
+          node --check public/local/worksheetlibrary/amd/build/browser.min.js
+          cmp public/local/worksheetlibrary/amd/src/browser.js public/local/worksheetlibrary/amd/build/browser.min.js
+          echo WSLIB_BROWSER_AMD_PARITY=PASS
       - name: Scoped CSS safety
         run: |
           ! grep -Eq '(^|[,{[:space:]])(body|html|#page)([,{[:space:]:.#]|$)' public/local/worksheetlibrary/styles.css
