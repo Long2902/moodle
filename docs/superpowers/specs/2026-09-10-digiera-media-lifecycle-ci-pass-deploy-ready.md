@@ -48,6 +48,19 @@ The failing R2 DELETE error path was traced to the wrong PHP class spelling `\ru
 
 The deploy helper explicitly rejects the old spelling and requires the corrected one before touching production files.
 
+## Post-verification CI cleanup
+
+Temporary one-purpose workflows used only to diagnose/fix the lifecycle failure were removed after RC1 #88 passed:
+
+- `.github/workflows/digiera-media-lifecycle-phpunitdiag.yml`
+  - removal commit `f290c76f015bb65430bf380c895a321cd9b616a2`
+- `.github/workflows/digiera-media-rc1-phpunitdiag-all.yml`
+  - removal commit `04534076fbff1cc32a986da79f8206ef960ef8c3`
+- `.github/workflows/digiera-media-runtime-exception-fix.yml`
+  - removal commit `84775576b5bc3d6a1aa32538db53851e9c7dfa4c`
+
+The normal RC1 workflow remains the authoritative CI path. The verified deploy helper and frozen product revisions are unchanged by this cleanup.
+
 ## Deploy-helper safety contract
 
 The helper performs, in order:
