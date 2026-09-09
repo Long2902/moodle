@@ -136,4 +136,58 @@ describe('DIGIERA Native paste sanitization', () => {
         view.destroy();
         element.remove();
     });
+
+    it('converts multiline plain text into semantic paragraph blocks', () => {
+        const element = document.createElement('div');
+        document.body.append(element);
+
+        const editor = mount({
+            element,
+            documentJson: {
+                type: 'worksheet',
+                version: 1,
+                content: [{type: 'paragraph'}],
+            },
+        });
+
+        const fixture = [
+            'PHASE 5 TEST',
+            'Đây là nội dung kiểm thử Native Editor.',
+            'Dòng kiểm tra autosave.',
+        ].join('\n');
+
+        const event = {
+            clipboardData: {
+                getData(type) {
+                    if (type === 'text/html') return '';
+                    if (type === 'text/plain') return fixture;
+                    return '';
+                },
+            },
+            preventDefault() {},
+        };
+
+        const applied = editor.view.props.handlePaste(editor.view, event);
+        expect(applied).toBe(true);
+
+        const json = editor.getJSON();
+        const paragraphs = json.content.filter(node => node.type === 'paragraph');
+        expect(paragraphs).toHaveLength(3);
+        expect(paragraphs.map(node => node.content?.[0]?.text || '')).toEqual([
+            'PHASE 5 TEST',
+            'Đây là nội dung kiểm thử Native Editor.',
+            'Dòng kiểm tra autosave.',
+        ]);
+
+        let rawNewlineTextNode = false;
+        editor.state.doc.descendants(node => {
+            if (node.isText && /\r|\n/.test(node.text || '')) {
+                rawNewlineTextNode = true;
+            }
+        });
+        expect(rawNewlineTextNode).toBe(false);
+
+        editor.destroy();
+        element.remove();
+    });
 });
