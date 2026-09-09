@@ -92,7 +92,7 @@ for cmd in php tar rsync sha256sum ssh scp date systemctl awk find sort xargs py
 done
 [ -d "$MOODLE_ROOT" ] || die "Missing Moodle root: $MOODLE_ROOT"
 [ -f "$MOODLE_ROOT/config.php" ] || die "Missing Moodle config.php"
-ssh -o BatchMode=yes -o ConnectTimeout=8 "root@$WEB02_IP" "test -d '$MOODLE_ROOT' && test -f '$MOODLE_ROOT/config.php'" || die "Web02 SSH preflight failed"
+ssh -o BatchMode=yes -o ConnectTimeout=8 "root@$WEB02_IP" "for cmd in php tar rsync sha256sum systemctl find sort xargs; do command -v \"\$cmd\" >/dev/null || exit 127; done; test -d '$MOODLE_ROOT' && test -f '$MOODLE_ROOT/config.php'" || die "Web02 SSH preflight failed"
 
 for rel in local/digieranative local/worksheetlibrary mod/worksheetgrader; do
     [ -d "$MOODLE_ROOT/$rel" ] || die "Missing Web01 plugin dir: $rel"
@@ -167,7 +167,7 @@ rm -rf "$STAGE_WEB01"
 mkdir -p "$STAGE_WEB01"
 tar -xzf "$PACKAGE" -C "$STAGE_WEB01"
 scp -q "$PACKAGE" "root@$WEB02_IP:$REMOTE_PACKAGE"
-ssh -o BatchMode=yes "root@$WEB02_IP" "test \"\$(sha256sum '$REMOTE_PACKAGE' | awk '{print \\$1}')\" = '$EXPECTED_PACKAGE_SHA'; rm -rf '$STAGE_WEB02'; mkdir -p '$STAGE_WEB02'; tar -xzf '$REMOTE_PACKAGE' -C '$STAGE_WEB02'"
+ssh -o BatchMode=yes "root@$WEB02_IP" "echo '$EXPECTED_PACKAGE_SHA  $REMOTE_PACKAGE' | sha256sum -c - >/dev/null; rm -rf '$STAGE_WEB02'; mkdir -p '$STAGE_WEB02'; tar -xzf '$REMOTE_PACKAGE' -C '$STAGE_WEB02'"
 
 say "===== DEPLOY WEB01 ====="
 rsync -a --delete "$STAGE_WEB01/public/local/digieranative/" "$MOODLE_ROOT/local/digieranative/"
