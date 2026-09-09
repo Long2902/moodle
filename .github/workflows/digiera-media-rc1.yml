@@ -16,6 +16,9 @@ on:
       - '.github/workflows/digiera-media-rc1.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   verify-package:
     runs-on: ubuntu-24.04
@@ -63,6 +66,27 @@ jobs:
           grep -q '"./ui"' public/lib/editor/tiny/plugins/digieramedia/amd/build/commands.min.js
           grep -q '_exports.open' public/lib/editor/tiny/plugins/digieramedia/amd/build/ui.min.js
           grep -q 'local_digieramedia_create_upload_session' public/lib/editor/tiny/plugins/digieramedia/amd/build/upload_client.min.js
+          grep -q 'local_digieramedia_update_reference_version' public/lib/editor/tiny/plugins/digieramedia/amd/build/ui.min.js
+          grep -q 'getSelectedReference' public/lib/editor/tiny/plugins/digieramedia/amd/build/reference_component.min.js
+      - name: Commit generated reference-state AMD runtime
+        if: github.ref_name == 'feature/digiera-media-v1-rc1-versioning'
+        shell: bash
+        run: |
+          set -euo pipefail
+          paths=(
+            public/lib/editor/tiny/plugins/digieramedia/amd/build/ui.min.js
+            public/lib/editor/tiny/plugins/digieramedia/amd/build/reference_component.min.js
+          )
+          if git diff --quiet -- "${paths[@]}"; then
+            echo 'AMD_RUNTIME_ALREADY_COMMITTED=YES'
+            exit 0
+          fi
+          git config user.name 'DIGIERA CI'
+          git config user.email '84571199+Long2902@users.noreply.github.com'
+          git add -- "${paths[@]}"
+          git commit -m 'build: refresh reference-state AMD runtime'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          echo 'AMD_RUNTIME_COMMIT=PASS'
       - name: Set up Moodle PHPUnit
         env:
           dbtype: mysqli
