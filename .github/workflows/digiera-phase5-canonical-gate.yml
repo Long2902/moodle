@@ -1,0 +1,99 @@
+name: DIGIERA Phase5 Canonical Gate
+
+on:
+  push:
+    branches:
+      - digiera/tiptap-v1-phase5-gate
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SOURCE_SHA: 3413597dd78b0cef6fbb1b5be59ac5b1ffe18504
+  PREVIOUS_PROD_SHA: 4d90ebdf297e8e1b1b43051e046d42fa904b53da
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Prove exact canonical product source
+        run: |
+          set -Eeuo pipefail
+          git fetch --no-tags --depth=2 origin digiera/preview-v01
+          test "$(git rev-parse origin/digiera/preview-v01)" = "$SOURCE_SHA"
+          git diff --exit-code "$SOURCE_SHA" HEAD -- \
+            public/local/digieranative \
+            public/local/worksheetlibrary \
+            public/mod/worksheetgrader
+          echo PHASE5_CANONICAL_PRODUCT_EXACT=PASS
+
+      - name: Prove UI-only no DB upgrade delta
+        run: |
+          set -Eeuo pipefail
+          git fetch --no-tags --depth=2 origin "$PREVIOUS_PROD_SHA"
+          CHANGED=$(git diff --name-only "$PREVIOUS_PROD_SHA" "$SOURCE_SHA")
+          printf '%s\n' "$CHANGED"
+          BAD=$(printf '%s\n' "$CHANGED" | grep -Ev '^public/local/worksheetlibrary/' || true)
+          test -z "$BAD"
+          DBDELTA=$(printf '%s\n' "$CHANGED" | grep -E '(^|/)(version\.php|db/install\.xml|db/upgrade\.php)$' || true)
+          test -z "$DBDELTA"
+          echo PHASE5_PRODUCT_SCOPE=PASS
+          echo DB_UPGRADE_REQUIRED=NO
+
+      - name: PHP lint all three product roots
+        run: |
+          set -Eeuo pipefail
+          count=0
+          while IFS= read -r -d '' f; do
+            php -l "$f" >/dev/null
+            count=$((count+1))
+          done < <(find public/local/digieranative public/local/worksheetlibrary public/mod/worksheetgrader -name '*.php' -print0)
+          echo PHP_LINT_FILES=$count
+          echo PHP_LINT=PASS
+
+      - name: UI V1 runtime contract and source safety
+        run: |
+          set -Eeuo pipefail
+          python3 public/local/worksheetlibrary/tests/ui_v1_runtime_contract.py
+          node --check public/local/worksheetlibrary/amd/src/browser.js
+          node --check public/local/worksheetlibrary/amd/build/browser.min.js
+          cmp public/local/worksheetlibrary/amd/src/browser.js public/local/worksheetlibrary/amd/build/browser.min.js
+          ! grep -Eq '(^|[,{[:space:]])(body|html|#page)([,{[:space:]:.#]|$)' public/local/worksheetlibrary/styles.css
+          ! grep -RE 'cdn\.tailwindcss\.com|cdnjs\.cloudflare\.com|fonts\.googleapis\.com' \
+            public/local/worksheetlibrary/index.php \
+            public/local/worksheetlibrary/detail.php \
+            public/local/worksheetlibrary/styles.css \
+            public/local/worksheetlibrary/amd/src/browser.js
+          echo WSLIB_UI_V1_RUNTIME_CONTRACT=PASS
+          echo WSLIB_BROWSER_AMD_PARITY=PASS
+          echo PHASE5_SCOPED_UI_SAFETY=PASS
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: public/local/digieranative/client/package-lock.json
+
+      - name: Native client regression suite
+        working-directory: public/local/digieranative/client
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+
+      - name: Native static contracts
+        run: |
+          node public/local/digieranative/client/tests/tiptap-adapter-standalone.mjs
+          python3 public/local/digieranative/tests/tiptap_hybrid_static_contract.py
+          echo PHASE5_NATIVE_REGRESSION=PASS
+
+      - name: Final Phase5 canonical source verdict
+        run: |
+          echo SOURCE_COMMIT_SHA=$SOURCE_SHA
+          echo DB_UPGRADE_REQUIRED=NO
+          echo PHASE5_CANONICAL_SOURCE_GATE=PASS
