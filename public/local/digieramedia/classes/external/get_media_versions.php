@@ -27,7 +27,10 @@ final class get_media_versions extends external_api {
 
         $canreplace = has_capability('local/digieramedia:replace', $context);
         $canmanageversions = has_capability('local/digieramedia:manageversions', $context);
-        if (!$canreplace && !$canmanageversions) {
+        $canlifecycle = has_capability('local/digieramedia:viewusage', $context)
+            || has_capability('local/digieramedia:restore', $context)
+            || has_capability('local/digieramedia:purge', $context);
+        if (!$canreplace && !$canmanageversions && !$canlifecycle) {
             throw new \required_capability_exception(
                 $context,
                 'local/digieramedia:manageversions',
@@ -36,10 +39,14 @@ final class get_media_versions extends external_api {
             );
         }
 
-        $media = $DB->get_record(
-            'local_digieramedia_media',
-            ['uuid' => $params['mediauuid'], 'status' => 'ACTIVE'],
-            '*',
+        [$statussql, $statusparams] = $DB->get_in_or_equal(['ACTIVE', 'TRASHED'], SQL_PARAMS_NAMED, 'mediastatus');
+        $statusparams['mediauuid'] = $params['mediauuid'];
+        $media = $DB->get_record_sql(
+            "SELECT *
+               FROM {local_digieramedia_media}
+              WHERE uuid = :mediauuid
+                AND status {$statussql}",
+            $statusparams,
             MUST_EXIST
         );
         $records = $DB->get_records(
@@ -62,11 +69,13 @@ final class get_media_versions extends external_api {
             ];
         }
 
+        $active = (string)$media->status === 'ACTIVE';
         return [
             'mediauuid' => (string)$media->uuid,
+            'mediastatus' => (string)$media->status,
             'currentversionid' => (int)$media->currentversionid,
-            'canreplace' => $canreplace,
-            'canmanageversions' => $canmanageversions,
+            'canreplace' => $active && $canreplace,
+            'canmanageversions' => $active && $canmanageversions,
             'versions' => $versions,
         ];
     }
@@ -74,6 +83,7 @@ final class get_media_versions extends external_api {
     public static function execute_returns(): external_single_structure {
         return new external_single_structure([
             'mediauuid' => new external_value(PARAM_ALPHANUMEXT, 'Media UUID'),
+            'mediastatus' => new external_value(PARAM_ALPHA, 'Media lifecycle status'),
             'currentversionid' => new external_value(PARAM_INT, 'Current version id'),
             'canreplace' => new external_value(PARAM_BOOL, 'Can replace the logical media'),
             'canmanageversions' => new external_value(PARAM_BOOL, 'Can manage versions'),
