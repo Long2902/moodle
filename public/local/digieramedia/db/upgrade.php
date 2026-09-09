@@ -1,5 +1,7 @@
 <?php
 
+namespace local_digieramedia;
+
 defined('MOODLE_INTERNAL') || die();
 
 function xmldb_local_digieramedia_upgrade(int $oldversion): bool {
@@ -8,8 +10,8 @@ function xmldb_local_digieramedia_upgrade(int $oldversion): bool {
     $dbman = $DB->get_manager();
 
     if ($oldversion < 2026090804) {
-        $table = new xmldb_table('local_digieramedia_upload');
-        $field = new xmldb_field(
+        $table = new \xmldb_table('local_digieramedia_upload');
+        $field = new \xmldb_field(
             'targetmediaid',
             XMLDB_TYPE_INTEGER,
             '10',
@@ -25,6 +27,10 @@ function xmldb_local_digieramedia_upgrade(int $oldversion): bool {
         }
 
         upgrade_plugin_savepoint(true, 2026090804, 'local', 'digieramedia');
+    }
+
+    if ($oldversion < 2026090901) {
+        upgrade_plugin_savepoint(true, 2026090901, 'local', 'digieramedia');
     }
 
     return true;
