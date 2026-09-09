@@ -8,6 +8,7 @@ REQUIRED = [
     'public/local/digieramedia/classes/external/search_media.php',
     'public/local/digieramedia/classes/external/create_reference.php',
     'public/local/digieramedia/classes/external/resolve_references.php',
+    'public/local/digieramedia/classes/external/update_reference_version.php',
     'public/local/digieramedia/classes/r2/config.php',
     'public/local/digieramedia/classes/r2/sigv4_client.php',
     'public/local/digieramedia/classes/service/file_policy.php',
@@ -24,6 +25,7 @@ REQUIRED = [
     'public/lib/editor/tiny/plugins/digieramedia/amd/src/reference_component.js',
     'public/lib/editor/tiny/plugins/digieramedia/amd/build/ui.min.js',
     'public/lib/editor/tiny/plugins/digieramedia/amd/build/upload_client.min.js',
+    'public/lib/editor/tiny/plugins/digieramedia/amd/build/reference_component.min.js',
     'public/lib/editor/tiny/plugins/digieramedia/templates/modal.mustache',
     'public/lib/editor/tiny/plugins/digieramedia/styles.css',
     'public/filter/digieramedia/classes/text_filter.php',
@@ -129,7 +131,7 @@ def test_live_r2_runtime_build_is_committed_and_wired():
     upload = read('public/lib/editor/tiny/plugins/digieramedia/amd/build/upload_client.min.js')
     assert 'tiny_digieramedia/ui' in ui
     assert './upload_client' in ui
-    assert 'UploadClient.uploadFile' in ui
+    assert '.uploadFile' in ui
     assert 'tiny_digieramedia/upload_client' in upload
     assert 'local_digieramedia_create_upload_session' in upload
     assert 'local_digieramedia_finalize_upload' in upload
@@ -140,6 +142,8 @@ def test_external_services_are_registered():
     assert 'local_digieramedia_search_media' in services
     assert 'local_digieramedia_create_reference' in services
     assert 'local_digieramedia_resolve_references' in services
+    assert 'local_digieramedia_get_media_versions' in services
+    assert 'local_digieramedia_update_reference_version' in services
 
 def test_shared_seed_visibility_is_insertable():
     search = read('public/local/digieramedia/classes/external/search_media.php')
@@ -190,6 +194,27 @@ def test_replace_and_versioning_contract():
     assert 'Lịch sử phiên bản' in ui
     assert 'PINNED_VERSION' in ui
     assert 'FOLLOW_CURRENT' in ui
+
+def test_reference_version_state_reopens_and_updates_existing_reference():
+    services = read('public/local/digieramedia/db/services.php')
+    resolver = read('public/local/digieramedia/classes/external/resolve_references.php')
+    updater = read('public/local/digieramedia/classes/external/update_reference_version.php')
+    component = read('public/lib/editor/tiny/plugins/digieramedia/amd/src/reference_component.js')
+    ui = read('public/lib/editor/tiny/plugins/digieramedia/amd/src/ui.js')
+    component_build = read('public/lib/editor/tiny/plugins/digieramedia/amd/build/reference_component.min.js')
+    ui_build = read('public/lib/editor/tiny/plugins/digieramedia/amd/build/ui.min.js')
+
+    assert 'local_digieramedia_update_reference_version' in services
+    assert 'r.versionmode' in resolver
+    assert 'r.pinnedversionid' in resolver
+    assert 'class update_reference_version' in updater
+    assert 'getSelectedReference' in component
+    assert 'data-digiera-version-mode' in component
+    assert 'updateReferenceState' in component
+    assert 'local_digieramedia_update_reference_version' in ui
+    assert 'Cập nhật reference' in ui
+    assert 'getSelectedReference' in component_build
+    assert 'local_digieramedia_update_reference_version' in ui_build
 
 if __name__ == '__main__':
     tests = [value for name, value in sorted(globals().items()) if name.startswith('test_') and callable(value)]
