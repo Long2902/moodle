@@ -17,7 +17,10 @@ const resolveReferences = async(config, referenceuuids) => Ajax.call([{
 }])[0];
 
 const updateComponentLabel = (node, item) => {
+    node.dataset.digieraMediaUuid = item.mediauuid || '';
     node.dataset.digieraMediaType = item.mediatype || 'media';
+    node.dataset.digieraVersionMode = item.versionmode || 'FOLLOW_CURRENT';
+    node.dataset.digieraPinnedVersionId = String(Number(item.pinnedversionid || 0));
     node.dataset.digieraHydrated = '1';
     node.innerHTML = `<strong>Học liệu DIGIERA:</strong> ${escapeHtml(item.name)}`;
 };
@@ -29,10 +32,20 @@ const updateComponentError = (node, message) => {
 
 export const marker = (uuid) => `[[digiera-ref:${uuid}]]`;
 
-export const componentHtml = ({referenceuuid, name, mediatype}) => (
+export const componentHtml = ({
+    referenceuuid,
+    mediauuid = '',
+    name,
+    mediatype,
+    versionmode = 'FOLLOW_CURRENT',
+    pinnedversionid = 0,
+}) => (
     `<span class="digiera-media-reference" contenteditable="false" ` +
     `data-digiera-reference-uuid="${escapeHtml(referenceuuid)}" ` +
-    `data-digiera-media-type="${escapeHtml(mediatype)}">` +
+    `data-digiera-media-uuid="${escapeHtml(mediauuid)}" ` +
+    `data-digiera-media-type="${escapeHtml(mediatype)}" ` +
+    `data-digiera-version-mode="${escapeHtml(versionmode)}" ` +
+    `data-digiera-pinned-version-id="${Number(pinnedversionid || 0)}">` +
     `<strong>Học liệu DIGIERA:</strong> ${escapeHtml(name)}` +
     `</span>`
 );
@@ -46,6 +59,34 @@ export const componentsToMarkers = (content) => String(content ?? '').replace(
     componentPattern,
     (match, uuid) => marker(uuid)
 );
+
+export const getSelectedReference = (editor) => {
+    const node = editor.selection.getNode();
+    const component = node?.closest?.('.digiera-media-reference[data-digiera-reference-uuid]');
+    if (!component) {
+        return null;
+    }
+    return {
+        referenceuuid: component.dataset.digieraReferenceUuid || '',
+        mediauuid: component.dataset.digieraMediaUuid || '',
+        mediatype: component.dataset.digieraMediaType || 'media',
+        versionmode: component.dataset.digieraVersionMode || 'FOLLOW_CURRENT',
+        pinnedversionid: Number(component.dataset.digieraPinnedVersionId || 0),
+    };
+};
+
+export const updateReferenceState = (editor, reference) => {
+    const body = editor.getBody();
+    if (!body || !reference?.referenceuuid) {
+        return;
+    }
+    const node = body.querySelector(
+        `.digiera-media-reference[data-digiera-reference-uuid="${reference.referenceuuid}"]`
+    );
+    if (node) {
+        updateComponentLabel(node, reference);
+    }
+};
 
 export const hydrateReferenceLabels = async(editor) => {
     const config = getConfig(editor);
