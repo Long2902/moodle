@@ -27,7 +27,16 @@ jobs:
       - name: Checkout isolated gate branch
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 2
+
+      - name: Fetch canonical comparison commits
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=2 origin digiera/preview-v01
+          git cat-file -e "$CANONICAL_SHA^{commit}"
+          git cat-file -e "$MATERIALIZATION_BASE_SHA^{commit}"
+          echo CANONICAL_COMPARE_HISTORY=PASS
 
       - name: Prove gate branch tests exact canonical product source
         shell: bash
