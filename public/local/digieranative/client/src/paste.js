@@ -1,5 +1,7 @@
 import {
     DOMParser as ProseMirrorDOMParser,
+    Fragment,
+    Slice,
 } from 'prosemirror-model';
 
 import {
@@ -57,274 +59,140 @@ const SAFE_DATA_ATTRIBUTES = new Set([
     'data-dgn-text-color',
 ]);
 
-const SAFE_ASSET_KEY =
-    /^[A-Za-z0-9_-]{1,128}$/;
+const SAFE_ASSET_KEY = /^[A-Za-z0-9_-]{1,128}$/;
 
 function isSafeUrl(value) {
-    if (
-        typeof value !== 'string' ||
-        value === ''
-    ) {
+    if (typeof value !== 'string' || value === '') {
         return false;
     }
-
     if (value.startsWith('/')) {
         return true;
     }
-
     try {
-        const url =
-            new URL(value);
-
-        return (
-            url.protocol === 'http:' ||
-            url.protocol === 'https:' ||
-            url.protocol ===
-                'dgn-asset:'
-        );
+        const url = new URL(value);
+        return url.protocol === 'http:' || url.protocol === 'https:' || url.protocol === 'dgn-asset:';
     } catch {
         return false;
     }
 }
 
-function sanitizeClassList(
-    element,
-) {
-    const classes =
-        element
-            .getAttribute('class')
-            ?.split(/\s+/)
-            .filter(Boolean)
-            .filter(
-                (name) =>
-                    name.startsWith(
-                        'dgn-',
-                    ),
-            ) || [];
+function sanitizeClassList(element) {
+    const classes = element.getAttribute('class')
+        ?.split(/\s+/)
+        .filter(Boolean)
+        .filter((name) => name.startsWith('dgn-')) || [];
 
     if (classes.length === 0) {
-        element.removeAttribute(
-            'class',
-        );
-
+        element.removeAttribute('class');
         return;
     }
-
-    element.setAttribute(
-        'class',
-        classes.join(' '),
-    );
+    element.setAttribute('class', classes.join(' '));
 }
 
-function sanitizeAttributes(
-    element,
-) {
-    for (
-        const attribute
-        of Array.from(
-            element.attributes,
-        )
-    ) {
-        const name =
-            attribute.name
-                .toLowerCase();
+function sanitizeAttributes(element) {
+    for (const attribute of Array.from(element.attributes)) {
+        const name = attribute.name.toLowerCase();
+        const value = attribute.value;
 
-        const value =
-            attribute.value;
-
-        if (
-            name.startsWith('on') ||
-            name === 'style' ||
-            name === 'srcdoc'
-        ) {
-            element.removeAttribute(
-                attribute.name,
-            );
-
+        if (name.startsWith('on') || name === 'style' || name === 'srcdoc') {
+            element.removeAttribute(attribute.name);
             continue;
         }
 
         if (name === 'class') {
-            sanitizeClassList(
-                element,
-            );
-
+            sanitizeClassList(element);
             continue;
         }
 
-        if (
-            SAFE_DATA_ATTRIBUTES.has(
-                name,
-            )
-        ) {
-            if (
-                name ===
-                    'data-asset-key' &&
-                !SAFE_ASSET_KEY.test(
-                    value,
-                )
-            ) {
-                element.removeAttribute(
-                    attribute.name,
-                );
+        if (SAFE_DATA_ATTRIBUTES.has(name)) {
+            if (name === 'data-asset-key' && !SAFE_ASSET_KEY.test(value)) {
+                element.removeAttribute(attribute.name);
             }
-
             continue;
         }
 
-        if (
-            !SAFE_ATTRIBUTES.has(
-                name,
-            )
-        ) {
-            element.removeAttribute(
-                attribute.name,
-            );
-
+        if (!SAFE_ATTRIBUTES.has(name)) {
+            element.removeAttribute(attribute.name);
             continue;
         }
 
-        if (
-            (
-                name === 'href' ||
-                name === 'src'
-            ) &&
-            !isSafeUrl(value)
-        ) {
-            element.removeAttribute(
-                attribute.name,
-            );
+        if ((name === 'href' || name === 'src') && !isSafeUrl(value)) {
+            element.removeAttribute(attribute.name);
         }
     }
 }
 
-export function sanitizePastedHtml(
-    html,
-    document,
-) {
-    const root =
-        document.createElement(
-            'div',
-        );
+export function sanitizePastedHtml(html, document) {
+    const root = document.createElement('div');
+    root.innerHTML = String(html || '');
 
-    root.innerHTML =
-        String(html || '');
-
-    for (
-        const element
-        of Array.from(
-            root.querySelectorAll('*'),
-        )
-    ) {
-        const tag =
-            element.tagName
-                .toLowerCase();
-
-        if (
-            BLOCKED_TAGS.has(tag)
-        ) {
+    for (const element of Array.from(root.querySelectorAll('*'))) {
+        const tag = element.tagName.toLowerCase();
+        if (BLOCKED_TAGS.has(tag)) {
             element.remove();
-
             continue;
         }
-
-        sanitizeAttributes(
-            element,
-        );
+        sanitizeAttributes(element);
     }
 
     return root;
 }
 
-export function parsePastedHtml(
-    html,
-    document,
-    targetSchema = schema,
-) {
-    const root =
-        sanitizePastedHtml(
-            html,
-            document,
-        );
+export function parsePastedHtml(html, document, targetSchema = schema) {
+    const root = sanitizePastedHtml(html, document);
+    return ProseMirrorDOMParser.fromSchema(targetSchema).parseSlice(root, {
+        preserveWhitespace: false,
+    });
+}
 
-    return ProseMirrorDOMParser
-        .fromSchema(targetSchema)
-        .parseSlice(
-            root,
-            {
-                preserveWhitespace:
-                    false,
-            },
-        );
+function multilineTextSlice(text, targetSchema) {
+    const normalized = text.replace(/\r\n?/g, '\n');
+    const lines = normalized.split('\n');
+    if (lines.length < 2) {
+        return null;
+    }
+
+    const paragraph = targetSchema.nodes.paragraph;
+    const blocks = lines.map((line) => paragraph.create(
+        null,
+        line === '' ? null : targetSchema.text(line),
+    ));
+
+    return new Slice(Fragment.fromArray(blocks), 0, 0);
 }
 
 export function createPasteHandler() {
-    return (
-        view,
-        event,
-    ) => {
-        const clipboard =
-            event.clipboardData;
-
+    return (view, event) => {
+        const clipboard = event.clipboardData;
         if (!clipboard) {
             return false;
         }
 
-        const html =
-            clipboard.getData(
-                'text/html',
-            );
-
+        const html = clipboard.getData('text/html');
         if (html) {
-            const document =
-                view.dom.ownerDocument;
+            const document = view.dom.ownerDocument;
+            const slice = parsePastedHtml(html, document, view.state.schema);
+            view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView());
 
-            const slice =
-                parsePastedHtml(
-                    html,
-                    document,
-                    view.state.schema,
-                );
-
-            view.dispatch(
-                view.state.tr
-                    .replaceSelection(
-                        slice,
-                    )
-                    .scrollIntoView(),
-            );
-
-            if (
-                typeof
-                    event.preventDefault ===
-                'function'
-            ) {
+            if (typeof event.preventDefault === 'function') {
                 event.preventDefault();
             }
-
             return true;
         }
 
-        const text =
-            clipboard.getData(
-                'text/plain',
-            );
-
+        const text = clipboard.getData('text/plain');
         if (!text) {
             return false;
         }
 
-        view.dispatch(
-            view.state.tr
-                .insertText(text)
-                .scrollIntoView(),
-        );
+        const slice = multilineTextSlice(text, view.state.schema);
+        const transaction = slice
+            ? view.state.tr.replaceSelection(slice)
+            : view.state.tr.insertText(text);
 
-        if (
-            typeof
-                event.preventDefault ===
-            'function'
-        ) {
+        view.dispatch(transaction.scrollIntoView());
+
+        if (typeof event.preventDefault === 'function') {
             event.preventDefault();
         }
 
