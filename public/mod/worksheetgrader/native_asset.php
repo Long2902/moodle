@@ -26,6 +26,15 @@ try {
     if (!\mod_worksheetgrader\service\attempt_manager::can_edit($activity, $team, (int)$USER->id)) {
         throw new required_capability_exception($context, 'mod/worksheetgrader:submit', 'nopermissions', '');
     }
+
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
+        echo json_encode([
+            'ok' => true,
+            'asseturls' => \mod_worksheetgrader\service\native_asset_service::asset_urls($context, $attemptid),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
     if (empty($_FILES['image'])) {
         throw new moodle_exception('Image upload is required');
     }
