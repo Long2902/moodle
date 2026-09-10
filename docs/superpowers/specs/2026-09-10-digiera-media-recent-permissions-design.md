@@ -2,7 +2,7 @@
 
 Date: 2026-09-10 (UTC+7)
 Branch: `feature/digiera-media-v1-rc1-recent-permissions`
-Status: **DESIGN APPROVED IN CHAT; WRITTEN SPEC AWAITING REVIEW**
+Status: **DESIGN APPROVED IN CHAT; SELF-REVIEWED WRITTEN SPEC AWAITING REVIEW**
 
 ## Goal
 
@@ -30,7 +30,7 @@ Fields:
 - `contextid` — context of the latest successful use
 - `lastusedat` — Unix timestamp of latest successful use
 - `usecount` — cumulative successful-use count for this user/media pair
-- `lastaction` — bounded action name describing the latest use
+- `lastaction` — one of `CREATE_REFERENCE` or `UPDATE_REFERENCE`
 
 Indexes/constraints:
 
@@ -65,7 +65,7 @@ public static function touch(
 ): void;
 ```
 
-The service owns insert/update semantics and action validation. Calling endpoints do not hand-write recent rows.
+The service owns insert/update semantics and validates `lastaction` against exactly `CREATE_REFERENCE` and `UPDATE_REFERENCE`. Calling endpoints do not hand-write recent rows.
 
 Repeated use by the same user/media updates `contextid`, `lastusedat`, and `lastaction`, and increments `usecount` while preserving one row per user/media pair.
 
@@ -75,7 +75,7 @@ For `search_media(tab=recent)`:
 
 - always constrain recent rows to the current `$USER->id`, including users with `viewall`;
 - join `local_digieramedia_recent r` to logical media;
-- sort primarily by `r.lastusedat DESC`, with a stable media-id tie-breaker;
+- sort primarily by `r.lastusedat DESC`, with `m.id DESC` as a stable tie-breaker;
 - include only `ACTIVE` media;
 - preserve the same visibility rules already used by Library for non-`viewall` users;
 - preserve text search, pagination, MIME/type presentation, and current-version metadata;
@@ -85,14 +85,14 @@ Trash behavior:
 
 - moving media to Trash does not delete recent history, but the item disappears from Recent because Recent only returns `ACTIVE` media;
 - restoring the same media makes it eligible to reappear at its previous recent position;
-- permanent purge removes all `local_digieramedia_recent` rows for that media as part of successful metadata cleanup.
+- permanent purge removes all `local_digieramedia_recent` rows for that media only after the purge has successfully completed its physical/version cleanup path.
 
 ## Version and upgrade
 
 New plugin floor for this batch:
 
 - `local_digieramedia = 2026091001`
-- Tiny/filter versions change only if their runtime files are modified; if the Tiny UI does not require code changes, do not bump it merely for symmetry.
+- Tiny/filter versions change only if their runtime files are modified; if the Tiny UI does not require code changes, do not bump them merely for symmetry.
 
 `db/install.xml` contains the new table for fresh installs.
 
@@ -117,9 +117,26 @@ The plugin remains capability-based. No PHP or JavaScript logic may branch on ro
 | Manage visibility | yes | yes | yes | no | no |
 | Permanent purge | site admin implicit / explicit capability | explicit capability | explicit capability | no | no |
 
-KTV is represented by assigning the required existing capabilities to a custom Moodle role. The plugin does not create or rename site roles in this batch.
+KTV is represented by assigning existing capabilities to a custom Moodle role. The plugin does not create or rename site roles in this batch.
 
-`local/digieramedia:purge` remains intentionally absent from default archetypes. Permanent purge must stay opt-in for non-site-admin roles.
+Recommended KTV capability bundle for this feature set:
+
+- `local/digieramedia:view`
+- `local/digieramedia:insert`
+- `local/digieramedia:upload`
+- `local/digieramedia:editown`
+- `local/digieramedia:editall`
+- `local/digieramedia:replace`
+- `local/digieramedia:trashown`
+- `local/digieramedia:trash`
+- `local/digieramedia:restore`
+- `local/digieramedia:viewusage`
+- `local/digieramedia:managevisibility`
+- `local/digieramedia:viewall`
+- `local/digieramedia:manageversions`
+- `local/digieramedia:manage`
+
+`local/digieramedia:purge` is deliberately excluded from that bundle and remains an explicit opt-in capability. `overridepath` and `migrate` are also out of this KTV acceptance scope.
 
 ## Permission enforcement requirements
 
