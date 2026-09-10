@@ -4,6 +4,7 @@ namespace local_digieramedia;
 
 use local_digieramedia\r2\client_interface;
 use local_digieramedia\service\lifecycle_service;
+use local_digieramedia\service\recent_service;
 
 final class lifecycle_fake_r2_client implements client_interface {
     public array $deleted = [];
@@ -28,7 +29,7 @@ final class lifecycle_fake_r2_client implements client_interface {
 }
 
 final class lifecycle_service_test extends \advanced_testcase {
-    public function test_trash_and_restore_preserve_identity_and_physical_object(): void {
+    public function test_trash_and_restore_preserve_identity_physical_object_and_recent_history(): void {
         global $DB, $USER;
 
         $this->resetAfterTest(true);
@@ -36,6 +37,7 @@ final class lifecycle_service_test extends \advanced_testcase {
         $context = \context_system::instance();
         [$mediaid, $versionids] = $this->seed_media($context->id, $USER->id, 'SHARED', 1);
         $uuid = (string)$DB->get_field('local_digieramedia_media', 'uuid', ['id' => $mediaid]);
+        (new recent_service())->touch($USER->id, $mediaid, $context->id, 'CREATE_REFERENCE', 1000);
         $client = new lifecycle_fake_r2_client();
         $service = new lifecycle_service($client);
 
@@ -49,6 +51,7 @@ final class lifecycle_service_test extends \advanced_testcase {
         $this->assertSame($versionids[0], (int)$media->currentversionid);
         $this->assertSame([], $client->deleted, 'Soft trash must never delete R2 objects.');
         $this->assertSame('TRASHED', $result['status']);
+        $this->assertTrue($DB->record_exists('local_digieramedia_recent', ['mediaid' => $mediaid]));
 
         $restored = $service->restore($USER->id, $context, $uuid);
         $media = $DB->get_record('local_digieramedia_media', ['id' => $mediaid], '*', MUST_EXIST);
@@ -56,6 +59,7 @@ final class lifecycle_service_test extends \advanced_testcase {
         $this->assertSame('SHARED', $media->visibility);
         $this->assertSame($versionids[0], (int)$media->currentversionid);
         $this->assertFalse($DB->record_exists('local_digieramedia_trash', ['mediaid' => $mediaid]));
+        $this->assertTrue($DB->record_exists('local_digieramedia_recent', ['mediaid' => $mediaid]));
         $this->assertSame('ACTIVE', $restored['status']);
     }
 
@@ -83,7 +87,7 @@ final class lifecycle_service_test extends \advanced_testcase {
         $this->assertSame('TRASHED', $DB->get_field('local_digieramedia_media', 'status', ['id' => $mediaid]));
     }
 
-    public function test_zero_reference_purge_deletes_all_versions_and_is_idempotent(): void {
+    public function test_zero_reference_purge_deletes_all_versions_recent_rows_and_is_idempotent(): void {
         global $DB, $USER;
 
         $this->resetAfterTest(true);
@@ -91,6 +95,11 @@ final class lifecycle_service_test extends \advanced_testcase {
         $context = \context_system::instance();
         [$mediaid, $versionids] = $this->seed_media($context->id, $USER->id, 'COURSE', 3);
         $uuid = (string)$DB->get_field('local_digieramedia_media', 'uuid', ['id' => $mediaid]);
+        $other = $this->getDataGenerator()->create_user();
+        $recent = new recent_service();
+        $recent->touch($USER->id, $mediaid, $context->id, 'CREATE_REFERENCE', 1000);
+        $recent->touch($other->id, $mediaid, $context->id, 'CREATE_REFERENCE', 2000);
+        $this->assertEquals(2, $DB->count_records('local_digieramedia_recent', ['mediaid' => $mediaid]));
         $client = new lifecycle_fake_r2_client();
         $service = new lifecycle_service($client);
         $service->trash($USER->id, $context, $uuid);
@@ -99,6 +108,7 @@ final class lifecycle_service_test extends \advanced_testcase {
         $this->assertSame('PURGED', $result['status']);
         $this->assertCount(3, $client->deleted);
         $this->assertSame('PURGED', $DB->get_field('local_digieramedia_media', 'status', ['id' => $mediaid]));
+        $this->assertEquals(0, $DB->count_records('local_digieramedia_recent', ['mediaid' => $mediaid]));
         foreach ($versionids as $versionid) {
             $version = $DB->get_record('local_digieramedia_version', ['id' => $versionid], '*', MUST_EXIST);
             $this->assertSame('PURGED', $version->status);
@@ -110,7 +120,7 @@ final class lifecycle_service_test extends \advanced_testcase {
         $this->assertCount(3, $client->deleted, 'Retry after completion must not delete versions twice.');
     }
 
-    public function test_partial_delete_failure_is_retryable_and_skips_purged_versions(): void {
+    public function test_partial_delete_failure_preserves_recent_until_retry_completes(): void {
         global $DB, $USER;
 
         $this->resetAfterTest(true);
@@ -118,6 +128,7 @@ final class lifecycle_service_test extends \advanced_testcase {
         $context = \context_system::instance();
         [$mediaid, $versionids] = $this->seed_media($context->id, $USER->id, 'PRIVATE', 3);
         $uuid = (string)$DB->get_field('local_digieramedia_media', 'uuid', ['id' => $mediaid]);
+        (new recent_service())->touch($USER->id, $mediaid, $context->id, 'CREATE_REFERENCE', 1000);
         $client = new lifecycle_fake_r2_client();
         $client->failondelete = 2;
         $service = new lifecycle_service($client);
@@ -132,11 +143,13 @@ final class lifecycle_service_test extends \advanced_testcase {
         $this->assertSame('PURGING', $DB->get_field('local_digieramedia_media', 'status', ['id' => $mediaid]));
         $this->assertSame('PURGED', $DB->get_field('local_digieramedia_version', 'status', ['id' => $versionids[0]]));
         $this->assertSame('READY', $DB->get_field('local_digieramedia_version', 'status', ['id' => $versionids[1]]));
+        $this->assertTrue($DB->record_exists('local_digieramedia_recent', ['mediaid' => $mediaid]));
 
         $client->failondelete = 0;
         $result = $service->purge($USER->id, $context, $uuid, false);
         $this->assertSame('PURGED', $result['status']);
         $this->assertCount(3, $client->deleted, 'One successful first attempt + two remaining retry deletes expected.');
+        $this->assertEquals(0, $DB->count_records('local_digieramedia_recent', ['mediaid' => $mediaid]));
     }
 
     public function test_force_purge_marks_live_references_unresolved_before_completion(): void {
