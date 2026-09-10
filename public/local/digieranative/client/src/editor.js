@@ -30,6 +30,21 @@ function normalizeLayout(value) {
     };
 }
 
+function safeAssetUrl(value) {
+    if (typeof value !== 'string' || value === '') {
+        return null;
+    }
+    if (value.startsWith('/') && !value.startsWith('//')) {
+        return value;
+    }
+    try {
+        const url = new URL(value, 'https://invalid.local');
+        return ['http:', 'https:'].includes(url.protocol) ? value : null;
+    } catch {
+        return null;
+    }
+}
+
 export function createEditorState(documentJson) {
     if (documentJson === null || typeof documentJson !== 'object' || Array.isArray(documentJson)) {
         throw new TypeError('Native document must be an object');
@@ -55,6 +70,7 @@ export function mount(config = {}) {
         downloadPdf = null,
         uploadImage = null,
         requestMath = null,
+        assetUrls = {},
         documentJson = {type: 'worksheet', version: 1, content: []},
     } = config;
 
@@ -69,6 +85,7 @@ export function mount(config = {}) {
         ? structuredClone(source.meta)
         : {};
     metadata.layout = normalizeLayout(metadata.layout || DEFAULT_LAYOUT);
+    const runtimeAssetUrls = {...(assetUrls || {})};
 
     const pasteHandler = createPasteHandler();
     const document = element.ownerDocument;
@@ -90,7 +107,26 @@ export function mount(config = {}) {
         version: source.version || 1,
         meta: structuredClone(metadata),
     });
+    const refreshAssetPreviews = urls => {
+        Object.assign(runtimeAssetUrls, urls || {});
+        element.querySelectorAll('figure[data-asset-key]').forEach(figure => {
+            const key = figure.getAttribute('data-asset-key') || '';
+            const url = safeAssetUrl(runtimeAssetUrls[key]);
+            if (!url) {
+                figure.removeAttribute('data-asset-url');
+                figure.style.removeProperty('background-image');
+                return;
+            }
+            figure.setAttribute('data-asset-url', url);
+            figure.style.backgroundImage = `url("${url.replaceAll('"', '%22')}")`;
+            const placeholder = figure.querySelector('.dgn-image__placeholder');
+            if (placeholder) {
+                placeholder.style.visibility = 'hidden';
+            }
+        });
+    };
     const notifyUpdate = () => {
+        refreshAssetPreviews();
         if (typeof onUpdate === 'function' && editor) {
             onUpdate(serialize());
         }
@@ -137,6 +173,9 @@ export function mount(config = {}) {
 
     editor.getNativeJSON = serialize;
     editor.updateNativeLayout = updateLayout;
+    editor.refreshAssetPreviews = refreshAssetPreviews;
+    editor.getAssetUrls = () => ({...runtimeAssetUrls});
+    refreshAssetPreviews();
 
     const reactRoot = createRoot(toolbarHost);
     flushSync(() => {
