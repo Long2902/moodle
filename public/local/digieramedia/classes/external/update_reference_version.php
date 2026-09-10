@@ -24,7 +24,7 @@ final class update_reference_version extends external_api {
         string $versionmode,
         int $pinnedversionid = 0
     ): array {
-        global $DB;
+        global $DB, $USER;
 
         $params = self::validate_parameters(
             self::execute_parameters(),
@@ -81,6 +81,12 @@ final class update_reference_version extends external_api {
         $reference->pinnedversionid = $pinnedversionid;
         $reference->timemodified = time();
         $DB->update_record('local_digieramedia_reference', $reference);
+        (new \local_digieramedia\service\recent_service())->touch(
+            (int)$USER->id,
+            (int)$media->id,
+            (int)$context->id,
+            'UPDATE_REFERENCE'
+        );
 
         return [
             'referenceuuid' => (string)$reference->uuid,
