@@ -44,6 +44,20 @@ define(['core/ajax', 'local_digieranative/native_editor'], function(Ajax, Native
             setStatus('error');
             window.alert(message || 'Không thể hoàn thành thao tác.');
         };
+        const loadAssetUrls = async () => {
+            try {
+                const url = `${M.cfg.wwwroot}/mod/worksheetgrader/native_asset.php?attemptid=${Number(config.attemptid)}&sesskey=${encodeURIComponent(M.cfg.sesskey)}`;
+                const response = await fetch(url, {credentials: 'same-origin'});
+                const result = await response.json();
+                if (!response.ok || !result.ok) {
+                    throw new Error(result.error || 'Không thể tải danh sách ảnh');
+                }
+                Object.assign(assetUrls, result.asseturls || {});
+                editor?.refreshAssetPreviews?.(assetUrls);
+            } catch (error) {
+                console.warn('DIGIERA Native attempt asset lookup failed', error);
+            }
+        };
 
         if (!canedit) {
             editor = NativeEditor.mount({
@@ -56,6 +70,7 @@ define(['core/ajax', 'local_digieranative/native_editor'], function(Ajax, Native
                 assetUrls,
             });
             editor.refreshAssetPreviews?.(assetUrls);
+            loadAssetUrls();
             setStatus('readonly');
             return;
         }
@@ -135,6 +150,7 @@ define(['core/ajax', 'local_digieranative/native_editor'], function(Ajax, Native
             },
         });
         editor.refreshAssetPreviews?.(assetUrls);
+        loadAssetUrls();
 
         if (form) {
             form.addEventListener('submit', async event => {
