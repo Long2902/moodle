@@ -60,10 +60,24 @@ final class renderer {
                 'underline' => '<u>' . $html . '</u>',
                 'strike' => '<s>' . $html . '</s>',
                 'textColor' => '<span style="color:' . self::escape((string)$mark['attrs']['color']) . '">' . $html . '</span>',
+                'link' => self::link_mark($html, $mark),
                 default => $html,
             };
         }
         return $html;
+    }
+
+    private static function link_mark(string $html, array $mark): string {
+        $attrs = $mark['attrs'] ?? [];
+        $href = self::safe_link_url((string)($attrs['href'] ?? ''));
+        if ($href === null) {
+            return $html;
+        }
+        $target = in_array(($attrs['target'] ?? null), ['_blank', '_self'], true)
+            ? ' target="' . self::escape((string)$attrs['target']) . '"'
+            : '';
+        $rel = $target === ' target="_blank"' ? ' rel="noopener noreferrer nofollow"' : '';
+        return '<a href="' . self::escape($href) . '"' . $target . $rel . '>' . $html . '</a>';
     }
 
     private static function wrap_textual(string $tag, string $class, array $node, string $mode, array $asseturls): string {
@@ -198,6 +212,18 @@ final class renderer {
             return null;
         }
         return $url;
+    }
+
+    private static function safe_link_url(string $value): ?string {
+        $url = trim($value);
+        if ($url === '' || preg_match('/[\x00-\x1F\x7F]/', $url)) {
+            return null;
+        }
+        if ((str_starts_with($url, '/') && !str_starts_with($url, '//')) || str_starts_with($url, '#')) {
+            return $url;
+        }
+        $scheme = parse_url($url, PHP_URL_SCHEME);
+        return is_string($scheme) && in_array(strtolower($scheme), ['http', 'https', 'mailto', 'tel'], true) ? $url : null;
     }
 
     private static function alignment_class(mixed $align): string {
