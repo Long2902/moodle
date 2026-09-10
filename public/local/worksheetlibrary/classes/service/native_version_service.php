@@ -38,7 +38,11 @@ final class native_version_service {
             }
 
             $document = validator::validate_json($nativejson);
-            $renderedhtml = renderer::render_json($nativejson, 'preview');
+            $renderedhtml = renderer::render_json(
+                $nativejson,
+                'preview',
+                native_asset_service::asset_urls($versionid)
+            );
             $nextrevision = $currentrevision + 1;
 
             $DB->update_record('wslib_version', (object)[
