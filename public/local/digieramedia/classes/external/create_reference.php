@@ -103,6 +103,12 @@ final class create_reference extends external_api {
             'timemodified' => $now,
         ];
         $DB->insert_record('local_digieramedia_reference', $record);
+        (new \local_digieramedia\service\recent_service())->touch(
+            (int)$USER->id,
+            (int)$media->id,
+            (int)$context->id,
+            'CREATE_REFERENCE'
+        );
 
         return [
             'referenceuuid' => $uuid,
