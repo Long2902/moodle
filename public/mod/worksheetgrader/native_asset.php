@@ -18,12 +18,12 @@ try {
     require_login($course, true, $cm);
     require_capability('mod/worksheetgrader:submit', $context);
 
-    if (($session->worksheetkind ?? '') !== 'native' || $attempt->status !== 'inprogress' ||
-            !\mod_worksheetgrader\service\session_manager::is_open($session) || !(bool)$session->membershiplocked) {
-        throw new moodle_exception('attemptnoteditable', 'mod_worksheetgrader');
+    if (($session->worksheetkind ?? '') !== 'native') {
+        throw new moodle_exception('Worksheet is not Native');
     }
     $team = $DB->get_record('wsg_team', ['id' => $attempt->teamid, 'sessionid' => $session->id], '*', MUST_EXIST);
-    if (!\mod_worksheetgrader\service\attempt_manager::can_edit($activity, $team, (int)$USER->id)) {
+    $members = \mod_worksheetgrader\service\team_manager::get_member_ids((int)$team->id);
+    if (!in_array((int)$USER->id, array_map('intval', $members), true)) {
         throw new required_capability_exception($context, 'mod/worksheetgrader:submit', 'nopermissions', '');
     }
 
@@ -35,6 +35,11 @@ try {
         exit;
     }
 
+    if ($attempt->status !== 'inprogress' ||
+            !\mod_worksheetgrader\service\session_manager::is_open($session) || !(bool)$session->membershiplocked ||
+            !\mod_worksheetgrader\service\attempt_manager::can_edit($activity, $team, (int)$USER->id)) {
+        throw new moodle_exception('attemptnoteditable', 'mod_worksheetgrader');
+    }
     if (empty($_FILES['image'])) {
         throw new moodle_exception('Image upload is required');
     }
