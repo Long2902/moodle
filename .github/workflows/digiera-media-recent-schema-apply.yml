@@ -30,27 +30,29 @@ jobs:
               raise SystemExit(0)
 
           marker = '    <TABLE NAME="local_digieramedia_audit" COMMENT="Redacted DIGIERA Media business audit log">'
-          recent = '''    <TABLE NAME="local_digieramedia_recent" COMMENT="Per-user recently used DIGIERA Media">
-      <FIELDS>
-        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
-        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
-        <FIELD NAME="mediaid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
-        <FIELD NAME="contextid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
-        <FIELD NAME="lastusedat" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
-        <FIELD NAME="usecount" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
-        <FIELD NAME="lastaction" TYPE="char" LENGTH="32" NOTNULL="true" DEFAULT="CREATE_REFERENCE" SEQUENCE="false"/>
-      </FIELDS>
-      <KEYS>
-        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
-        <KEY NAME="mediaid" TYPE="foreign" FIELDS="mediaid" REFTABLE="local_digieramedia_media" REFFIELDS="id"/>
-      </KEYS>
-      <INDEXES>
-        <INDEX NAME="user-media" UNIQUE="true" FIELDS="userid, mediaid"/>
-        <INDEX NAME="user-lastused" UNIQUE="false" FIELDS="userid, lastusedat"/>
-      </INDEXES>
-    </TABLE>
-
-'''
+          lines = [
+              '    <TABLE NAME="local_digieramedia_recent" COMMENT="Per-user recently used DIGIERA Media">',
+              '      <FIELDS>',
+              '        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>',
+              '        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>',
+              '        <FIELD NAME="mediaid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>',
+              '        <FIELD NAME="contextid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>',
+              '        <FIELD NAME="lastusedat" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>',
+              '        <FIELD NAME="usecount" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>',
+              '        <FIELD NAME="lastaction" TYPE="char" LENGTH="32" NOTNULL="true" DEFAULT="CREATE_REFERENCE" SEQUENCE="false"/>',
+              '      </FIELDS>',
+              '      <KEYS>',
+              '        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>',
+              '        <KEY NAME="mediaid" TYPE="foreign" FIELDS="mediaid" REFTABLE="local_digieramedia_media" REFFIELDS="id"/>',
+              '      </KEYS>',
+              '      <INDEXES>',
+              '        <INDEX NAME="user-media" UNIQUE="true" FIELDS="userid, mediaid"/>',
+              '        <INDEX NAME="user-lastused" UNIQUE="false" FIELDS="userid, lastusedat"/>',
+              '      </INDEXES>',
+              '    </TABLE>',
+              '',
+          ]
+          recent = '\n'.join(lines) + '\n'
           if marker not in text:
               raise SystemExit('audit table marker not found')
           text = text.replace(marker, recent + marker, 1)
