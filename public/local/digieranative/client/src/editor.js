@@ -19,6 +19,17 @@ import {schema} from './schema.js';
 import {createDigieraExtensions} from './tiptap_extensions.js';
 import {OfficialEditor} from './ui/official_editor.js';
 
+const DEFAULT_LAYOUT = Object.freeze({paper: 'A4', orientation: 'portrait', margin: 'normal'});
+
+function normalizeLayout(value) {
+    const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    return {
+        paper: 'A4',
+        orientation: source.orientation === 'landscape' ? 'landscape' : 'portrait',
+        margin: ['normal', 'narrow', 'wide'].includes(source.margin) ? source.margin : 'normal',
+    };
+}
+
 export function createEditorState(documentJson) {
     if (documentJson === null || typeof documentJson !== 'object' || Array.isArray(documentJson)) {
         throw new TypeError('Native document must be an object');
@@ -40,6 +51,10 @@ export function mount(config = {}) {
         readonly = false,
         save = null,
         onUpdate = null,
+        print = null,
+        downloadPdf = null,
+        uploadImage = null,
+        requestMath = null,
         documentJson = {type: 'worksheet', version: 1, content: []},
     } = config;
 
@@ -50,19 +65,46 @@ export function mount(config = {}) {
     const source = documentJson.type === 'worksheet'
         ? documentJson
         : {type: 'worksheet', version: 1, content: documentJson.content || []};
+    const metadata = source.meta && typeof source.meta === 'object' && !Array.isArray(source.meta)
+        ? structuredClone(source.meta)
+        : {};
+    metadata.layout = normalizeLayout(metadata.layout || DEFAULT_LAYOUT);
+
     const pasteHandler = createPasteHandler();
     const document = element.ownerDocument;
 
     element.replaceChildren();
     element.classList.add('dgn-editor');
+    element.dataset.orientation = metadata.layout.orientation;
+    element.dataset.margin = metadata.layout.margin;
 
     const toolbarHost = document.createElement('div');
     toolbarHost.className = 'dgn-official-toolbar-host';
     const canvasHost = document.createElement('div');
     canvasHost.className = 'dgn-canvas-host';
+    canvasHost.style.setProperty('--dgn-zoom', '1');
     element.append(toolbarHost, canvasHost);
 
-    const editor = new Editor({
+    let editor = null;
+    const serialize = () => toNativeDocument(editor.getJSON(), {
+        version: source.version || 1,
+        meta: structuredClone(metadata),
+    });
+    const notifyUpdate = () => {
+        if (typeof onUpdate === 'function' && editor) {
+            onUpdate(serialize());
+        }
+    };
+    const saveNow = () => typeof save === 'function' ? save(serialize()) : null;
+    const updateLayout = next => {
+        metadata.layout = normalizeLayout(next);
+        element.dataset.orientation = metadata.layout.orientation;
+        element.dataset.margin = metadata.layout.margin;
+        notifyUpdate();
+        return {...metadata.layout};
+    };
+
+    editor = new Editor({
         element: canvasHost,
         content: fromNativeDocument(documentJson),
         editable: !readonly,
@@ -75,9 +117,7 @@ export function mount(config = {}) {
                     openOnClick: false,
                     autolink: true,
                     linkOnPaste: true,
-                    HTMLAttributes: {
-                        rel: 'noopener noreferrer nofollow',
-                    },
+                    HTMLAttributes: {rel: 'noopener noreferrer nofollow'},
                 },
                 trailingNode: false,
             }),
@@ -90,15 +130,13 @@ export function mount(config = {}) {
                 return pasteHandler(view, event);
             },
         },
-        onUpdate({editor: current}) {
-            if (typeof onUpdate === 'function') {
-                onUpdate(toNativeDocument(current.getJSON(), {
-                    version: source.version || 1,
-                    meta: source.meta,
-                }));
-            }
+        onUpdate() {
+            notifyUpdate();
         },
     });
+
+    editor.getNativeJSON = serialize;
+    editor.updateNativeLayout = updateLayout;
 
     const reactRoot = createRoot(toolbarHost);
     flushSync(() => {
@@ -106,8 +144,13 @@ export function mount(config = {}) {
             editor,
             hostElement: element,
             readonly,
-            save,
-            documentJson: source,
+            saveNow,
+            print,
+            downloadPdf,
+            uploadImage,
+            requestMath,
+            updateLayout,
+            initialLayout: metadata.layout,
             useTiptapEditorState: useEditorState,
         }));
     });
