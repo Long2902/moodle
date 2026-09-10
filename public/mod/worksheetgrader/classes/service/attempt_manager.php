@@ -42,6 +42,17 @@ class attempt_manager {
             'version' => 1,
         ];
         $attempt->id = $DB->insert_record('wsg_attempt', $attempt);
+
+        if (($session->worksheetkind ?? '') === 'native' && !empty($session->libraryversionid)) {
+            $activity = $DB->get_record('worksheetgrader', ['id' => $session->worksheetgraderid], '*', MUST_EXIST);
+            $cm = get_coursemodule_from_instance('worksheetgrader', $activity->id, $activity->course, false, MUST_EXIST);
+            native_asset_service::clone_library_assets(
+                \context_module::instance($cm->id),
+                (int)$attempt->id,
+                (int)$session->libraryversionid
+            );
+        }
+
         audit_logger::log(
             (int)$session->worksheetgraderid,
             'attempt_started',
@@ -70,8 +81,6 @@ class attempt_manager {
             throw new \moodle_exception('attemptlocktimeout', 'mod_worksheetgrader');
         }
         try {
-            // Always re-read under the lock. Image uploads are slower than normal
-            // autosaves, so the object supplied by the page may already be stale.
             $current = $DB->get_record('wsg_attempt', ['id' => $attempt->id], '*', MUST_EXIST);
             if ($current->status !== 'inprogress') {
                 throw new \moodle_exception('attemptnoteditable', 'mod_worksheetgrader');
@@ -90,7 +99,6 @@ class attempt_manager {
                     if (!preg_match('/^[CSBLU]\d+$/', (string)$code)) {
                         continue;
                     }
-                    // U fields store the Moodle filename only; the bytes live in File API.
                     $clean[$code] = clean_param((string)$value, PARAM_RAW);
                 }
                 $current->answersjson = json_encode($clean, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -113,9 +121,6 @@ class attempt_manager {
             throw new \moodle_exception('attemptlocktimeout', 'mod_worksheetgrader');
         }
         try {
-            // Re-read under the same lock used by autosave. This prevents a slow
-            // multipart image upload and a 10-second AJAX autosave from racing and
-            // reverting a newly submitted attempt back to in-progress.
             $attempt = $DB->get_record('wsg_attempt', ['id' => $attempt->id], '*', MUST_EXIST);
             if ($attempt->status !== 'inprogress') {
                 throw new \moodle_exception('attemptalreadysubmitted', 'mod_worksheetgrader');
@@ -137,7 +142,12 @@ class attempt_manager {
                 $nativejson = json_encode($answers, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                 \local_digieranative\document\validator::validate_json($nativejson);
                 $attempt->answersjson = $nativejson;
-                $attempt->submissionhtml = \local_digieranative\document\renderer::render_json($nativejson, 'submission');
+                $context = \context_module::instance($cm->id);
+                $attempt->submissionhtml = \local_digieranative\document\renderer::render_json(
+                    $nativejson,
+                    'submission',
+                    native_asset_service::asset_urls($context, (int)$attempt->id)
+                );
             } else {
                 $attempt->submissionhtml = \worksheetgrader_build_submission_html(
                     $session->contenthtml ?: $activity->contenthtml,
