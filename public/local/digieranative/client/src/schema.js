@@ -1,9 +1,37 @@
 import {Schema} from 'prosemirror-model';
 import {markSpecs, nodeSpecs} from './schema_specs.js';
 
+const linkMarkSpec = {
+    attrs: {
+        href: {},
+        target: {default: null},
+        rel: {default: null},
+        class: {default: null},
+    },
+    inclusive: false,
+    toDOM(mark) {
+        const attrs = {href: mark.attrs.href};
+        if (mark.attrs.target) attrs.target = mark.attrs.target;
+        if (mark.attrs.rel) attrs.rel = mark.attrs.rel;
+        if (mark.attrs.class) attrs.class = mark.attrs.class;
+        return ['a', attrs, 0];
+    },
+    parseDOM: [{
+        tag: 'a[href]',
+        getAttrs(dom) {
+            return {
+                href: dom.getAttribute('href') || '',
+                target: dom.getAttribute('target'),
+                rel: dom.getAttribute('rel'),
+                class: dom.getAttribute('class'),
+            };
+        },
+    }],
+};
+
 export const schema = new Schema({
     nodes: nodeSpecs,
-    marks: markSpecs,
+    marks: {...markSpecs, link: linkMarkSpec},
 });
 
 const SAFE_ID = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -58,6 +86,21 @@ function assertSafeId(attrs, key) {
         !SAFE_ID.test(value)
     ) {
         throw new TypeError(`${key} is invalid`);
+    }
+}
+
+function isSafeLinkUrl(value) {
+    if (typeof value !== 'string' || value === '' || utf8ByteLength(value) > 2048 || /[\u0000-\u001f\u007f]/.test(value)) {
+        return false;
+    }
+    if ((value.startsWith('/') && !value.startsWith('//')) || value.startsWith('#')) {
+        return true;
+    }
+    try {
+        const url = new URL(value);
+        return ['http:', 'https:', 'mailto:', 'tel:'].includes(url.protocol);
+    } catch {
+        return false;
     }
 }
 
@@ -229,6 +272,23 @@ export function validateMarkAttrs(type, attrs = {}) {
             );
         }
 
+        return true;
+    }
+
+    if (type === 'link') {
+        const allowed = new Set(['href', 'target', 'rel', 'class']);
+        if (Object.keys(attrs).some(key => !allowed.has(key)) || !isSafeLinkUrl(attrs.href)) {
+            throw new TypeError('Invalid link href');
+        }
+        for (const key of ['target', 'rel', 'class']) {
+            if (attrs[key] !== undefined && attrs[key] !== null &&
+                    (typeof attrs[key] !== 'string' || utf8ByteLength(attrs[key]) > 2048)) {
+                throw new TypeError('Invalid link attribute');
+            }
+        }
+        if (attrs.target !== undefined && attrs.target !== null && !['_blank', '_self'].includes(attrs.target)) {
+            throw new TypeError('Invalid link target');
+        }
         return true;
     }
 
