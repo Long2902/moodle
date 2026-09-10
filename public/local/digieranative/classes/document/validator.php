@@ -170,9 +170,37 @@ final class validator {
                 throw new \invalid_parameter_exception('Invalid text color');
             }
             self::assert_allowed_keys($attrs, ['color'], 'textColor attrs');
+        } else if ($mark['type'] === 'link') {
+            $attrs = $mark['attrs'] ?? null;
+            if (!is_array($attrs) || !isset($attrs['href']) || !is_string($attrs['href']) || !self::is_safe_link_url($attrs['href'])) {
+                throw new \invalid_parameter_exception('Invalid link href');
+            }
+            self::assert_allowed_keys($attrs, ['href', 'target', 'rel', 'class'], 'link attrs');
+            foreach (['target', 'rel', 'class'] as $key) {
+                if (isset($attrs[$key]) && (!is_string($attrs[$key]) || strlen($attrs[$key]) > self::MAX_ATTR_TEXT)) {
+                    throw new \invalid_parameter_exception('Invalid link attribute');
+                }
+            }
+            if (isset($attrs['target']) && !in_array($attrs['target'], ['_blank', '_self'], true)) {
+                throw new \invalid_parameter_exception('Invalid link target');
+            }
         } else if (isset($mark['attrs']) && $mark['attrs'] !== []) {
             throw new \invalid_parameter_exception('This mark does not accept attrs');
         }
+    }
+
+    private static function is_safe_link_url(string $value): bool {
+        if ($value === '' || strlen($value) > self::MAX_ATTR_TEXT || preg_match('/[\x00-\x1F\x7F]/', $value)) {
+            return false;
+        }
+        if (str_starts_with($value, '/') && !str_starts_with($value, '//')) {
+            return true;
+        }
+        if (str_starts_with($value, '#')) {
+            return true;
+        }
+        $scheme = parse_url($value, PHP_URL_SCHEME);
+        return is_string($scheme) && in_array(strtolower($scheme), ['http', 'https', 'mailto', 'tel'], true);
     }
 
     private static function require_safe_id(array $attrs, string $key): void {
