@@ -20,10 +20,19 @@ final class search_media extends external_api {
         ]);
     }
 
-    public static function execute(int $contextid, string $tab = 'library', string $query = '', int $page = 0, int $pagesize = 24): array {
+    public static function execute(
+        int $contextid,
+        string $tab = 'library',
+        string $query = '',
+        int $page = 0,
+        int $pagesize = 24
+    ): array {
         global $DB, $USER;
 
-        $params = self::validate_parameters(self::execute_parameters(), compact('contextid', 'tab', 'query', 'page', 'pagesize'));
+        $params = self::validate_parameters(
+            self::execute_parameters(),
+            compact('contextid', 'tab', 'query', 'page', 'pagesize')
+        );
         $context = context::instance_by_id($params['contextid'], MUST_EXIST);
         self::validate_context($context);
         require_capability('local/digieramedia:view', $context);
@@ -83,14 +92,27 @@ final class search_media extends external_api {
             $sqlparams['query'] = '%' . $DB->sql_like_escape($query) . '%';
         }
 
-        $wheresql = implode(' AND ', $where);
-        $fromsql = " FROM {local_digieramedia_media} m
+        if ($tab === 'recent') {
+            $sqlparams['recentuserid'] = (int)$USER->id;
+            $fromsql = " FROM {local_digieramedia_media} m
+                          JOIN {local_digieramedia_recent} r
+                            ON r.mediaid = m.id AND r.userid = :recentuserid
                      LEFT JOIN {local_digieramedia_version} v ON v.id = m.currentversionid ";
-        $total = (int)$DB->count_records_sql('SELECT COUNT(1)' . $fromsql . ' WHERE ' . $wheresql, $sqlparams);
+            $order = ' ORDER BY r.lastusedat DESC, m.id DESC';
+        } else {
+            $fromsql = " FROM {local_digieramedia_media} m
+                     LEFT JOIN {local_digieramedia_version} v ON v.id = m.currentversionid ";
+            $order = ' ORDER BY m.timemodified DESC, m.id DESC';
+        }
+
+        $wheresql = implode(' AND ', $where);
+        $total = (int)$DB->count_records_sql(
+            'SELECT COUNT(1)' . $fromsql . ' WHERE ' . $wheresql,
+            $sqlparams
+        );
 
         $select = "SELECT m.id, m.uuid, m.name, m.mediatype, m.mimetype, m.visibility, m.status,
                           m.owneruserid, m.timemodified, v.filesize, v.displayfilename, v.status AS versionstatus";
-        $order = ' ORDER BY m.timemodified DESC, m.id DESC';
         $records = $DB->get_records_sql(
             $select . $fromsql . ' WHERE ' . $wheresql . $order,
             $sqlparams,
