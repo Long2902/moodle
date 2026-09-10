@@ -1,0 +1,73 @@
+name: DIGIERA Media apply recent schema
+
+on:
+  push:
+    branches:
+      - feature/digiera-media-v1-rc1-recent-permissions
+    paths:
+      - '.github/workflows/digiera-media-recent-schema-apply.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-schema:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Insert recent table into install.xml
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('public/local/digieramedia/db/install.xml')
+          text = path.read_text()
+          if 'TABLE NAME="local_digieramedia_recent"' in text:
+              print('RECENT_SCHEMA_ALREADY_PRESENT=YES')
+              raise SystemExit(0)
+
+          marker = '    <TABLE NAME="local_digieramedia_audit" COMMENT="Redacted DIGIERA Media business audit log">'
+          recent = '''    <TABLE NAME="local_digieramedia_recent" COMMENT="Per-user recently used DIGIERA Media">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="mediaid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="contextid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="lastusedat" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="usecount" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="lastaction" TYPE="char" LENGTH="32" NOTNULL="true" DEFAULT="CREATE_REFERENCE" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="mediaid" TYPE="foreign" FIELDS="mediaid" REFTABLE="local_digieramedia_media" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="user-media" UNIQUE="true" FIELDS="userid, mediaid"/>
+        <INDEX NAME="user-lastused" UNIQUE="false" FIELDS="userid, lastusedat"/>
+      </INDEXES>
+    </TABLE>
+
+'''
+          if marker not in text:
+              raise SystemExit('audit table marker not found')
+          text = text.replace(marker, recent + marker, 1)
+          text = text.replace('VERSION="20260908"', 'VERSION="20260910"', 1)
+          path.write_text(text)
+          print('RECENT_SCHEMA_PATCHED=YES')
+          PY
+      - name: Commit schema patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- public/local/digieramedia/db/install.xml; then
+            echo 'NO_SCHEMA_DIFF=YES'
+            exit 0
+          fi
+          git config user.name 'DIGIERA CI'
+          git config user.email '84571199+Long2902@users.noreply.github.com'
+          git add public/local/digieramedia/db/install.xml
+          git commit -m 'feat: add per-user recent schema'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
