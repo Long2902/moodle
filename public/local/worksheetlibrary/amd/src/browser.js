@@ -1,5 +1,6 @@
-define([], function() {
+define(['local_digieranative/native_editor'], function(NativeEditor) {
     const modalSelector = name => `[data-modal="${name}"]`;
+    let latestNativeJson = null;
 
     const openModal = name => {
         const modal = document.querySelector(modalSelector(name));
@@ -57,17 +58,29 @@ define([], function() {
             </div>`;
     };
 
+    const currentNativeJson = () => {
+        if (latestNativeJson) {
+            return latestNativeJson;
+        }
+        return document.querySelector('[data-region="native-editor"]')?._wslibNativeJson || null;
+    };
+
     const populatePublishPreview = () => {
         const target = document.querySelector('[data-region="publish-preview"]');
-        const canvas = document.querySelector('.dgn-canvas');
-        if (!target || !canvas) {
+        const nativejson = currentNativeJson();
+        if (!target || !nativejson) {
             return;
         }
-        target.innerHTML = canvas.innerHTML;
-        target.querySelectorAll('[contenteditable]').forEach(node => node.removeAttribute('contenteditable'));
+        NativeEditor.renderPreview(nativejson, target);
     };
 
     const init = () => {
+        document.addEventListener('wslib:native-document', event => {
+            if (event.detail?.nativejson) {
+                latestNativeJson = event.detail.nativejson;
+            }
+        });
+
         document.querySelector('[data-action="new-item"]')?.addEventListener('click', () => openModal('create-item'));
         document.querySelector('[data-action="new-folder"]')?.addEventListener('click', () => openModal('create-folder'));
         document.querySelector('[data-action="open-publish"]')?.addEventListener('click', () => {

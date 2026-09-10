@@ -8,7 +8,7 @@ describe('DIGIERA Native Tiptap mount API',()=>{
   const editor=mount({element,documentJson:{type:'worksheet',version:1,content:[{type:'paragraph',content:[{type:'text',text:'Frozen mount contract'}]}]}});
   expect(editor.getJSON().type).toBe('doc');
   expect(editor.state.doc.textContent).toBe('Frozen mount contract');
-  expect(element.querySelector('.dgn-ribbon')).not.toBeNull();
+  expect(element.querySelector('[data-dgn-official-toolbar="1"]')).not.toBeNull();
   expect(editor.view.dom.classList.contains('dgn-canvas')).toBe(true);
   editor.destroy();element.remove();
  });
