@@ -55,6 +55,44 @@ final class native_asset_service {
         ];
     }
 
+    public static function clone_library_assets(\context_module $context, int $attemptid, int $libraryversionid): void {
+        if ($libraryversionid <= 0) {
+            return;
+        }
+        $fs = get_file_storage();
+        $sourcecontext = \context_system::instance();
+        foreach ($fs->get_area_files(
+            $sourcecontext->id,
+            'local_worksheetlibrary',
+            'nativeasset',
+            $libraryversionid,
+            'id ASC',
+            false
+        ) as $file) {
+            if ($file->is_directory()) {
+                continue;
+            }
+            $record = [
+                'contextid' => $context->id,
+                'component' => 'mod_worksheetgrader',
+                'filearea' => self::FILEAREA,
+                'itemid' => $attemptid,
+                'filepath' => '/native/',
+                'filename' => $file->get_filename(),
+            ];
+            if (!$fs->file_exists(
+                $context->id,
+                'mod_worksheetgrader',
+                self::FILEAREA,
+                $attemptid,
+                '/native/',
+                $file->get_filename()
+            )) {
+                $fs->create_file_from_storedfile($record, $file);
+            }
+        }
+    }
+
     public static function asset_urls(\context_module $context, int $attemptid): array {
         $urls = [];
         foreach (get_file_storage()->get_area_files(
