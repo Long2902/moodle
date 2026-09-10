@@ -13,6 +13,7 @@ final class schema_test extends \advanced_testcase {
             'local_digieramedia_upload',
             'local_digieramedia_upart',
             'local_digieramedia_trash',
+            'local_digieramedia_recent',
             'local_digieramedia_audit',
             'local_digieramedia_migration',
             'local_digieramedia_migitem',
@@ -30,6 +31,7 @@ final class schema_test extends \advanced_testcase {
             ['local_digieramedia_upload', 'sessionuuid', ['sessionuuid']],
             ['local_digieramedia_version', 'media-version', ['mediaid', 'versionno']],
             ['local_digieramedia_upart', 'upload-part', ['uploadid', 'partnumber']],
+            ['local_digieramedia_recent', 'user-media', ['userid', 'mediaid']],
             ['local_digieramedia_migration', 'jobuuid', ['jobuuid']],
             ['local_digieramedia_migitem', 'migration-fingerprint', ['migrationid', 'candidatefingerprint']],
         ];
@@ -42,5 +44,17 @@ final class schema_test extends \advanced_testcase {
                 $table . ':' . $index
             );
         }
+    }
+
+    public function test_recent_user_time_index_exists(): void {
+        global $DB;
+        $dbman = $DB->get_manager();
+        $this->assertTrue(
+            $dbman->index_exists(
+                new \xmldb_table('local_digieramedia_recent'),
+                new \xmldb_index('user-lastused', XMLDB_INDEX_NOTUNIQUE, ['userid', 'lastusedat'])
+            ),
+            'local_digieramedia_recent:user-lastused'
+        );
     }
 }
