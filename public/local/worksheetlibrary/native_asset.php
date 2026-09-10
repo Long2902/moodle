@@ -9,6 +9,23 @@ header('Content-Type: application/json; charset=utf-8');
 
 try {
     $versionid = required_param('versionid', PARAM_INT);
+    $version = $DB->get_record('wslib_version', ['id' => $versionid], '*', MUST_EXIST);
+    $item = $DB->get_record('wslib_item', ['id' => $version->itemid], '*', MUST_EXIST);
+    if ($item->kind !== 'native') {
+        throw new moodle_exception('Worksheet is not Native');
+    }
+
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
+        echo json_encode([
+            'ok' => true,
+            'asseturls' => \local_worksheetlibrary\service\native_asset_service::asset_urls($versionid),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    if ($version->state !== 'draft') {
+        throw new moodle_exception('Only draft Native versions accept images');
+    }
     if (empty($_FILES['image'])) {
         throw new moodle_exception('Image upload is required');
     }
@@ -30,7 +47,6 @@ try {
         throw new moodle_exception('Unsupported image type');
     }
 
-    // The service performs the same checks again and creates the File API record.
     $result = \local_worksheetlibrary\service\native_asset_service::store_upload(
         $versionid,
         $upload,
