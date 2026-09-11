@@ -9,7 +9,10 @@ describe('official Tiptap UI build contract', () => {
         expect(editor).not.toMatch(/createRibbon/);
     });
 
-    it('does not depend on a runtime CDN', () => {
-        expect(editor).not.toMatch(/https?:\/\//);
+    it('does not depend on a runtime CDN or remote module import', () => {
+        // HTTPS values are valid runtime data (for example managed image URLs),
+        // so the contract must reject remote code dependencies rather than every URL literal.
+        expect(editor).not.toMatch(/(?:from\s+|import\s*\()\s*['"]https?:\/\//);
+        expect(editor).not.toMatch(/(?:cdn\.jsdelivr\.net|unpkg\.com|esm\.sh|cdn\.skypack\.dev)/);
     });
 });
