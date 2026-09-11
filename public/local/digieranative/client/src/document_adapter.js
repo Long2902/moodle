@@ -1,6 +1,7 @@
 import {LEGACY_IMAGE_RUNTIME_DEFAULTS} from './native_schema_extensions.js';
 
 const NATIVE_STYLE_MARKS = new Set(['textColor', 'fontFamily', 'fontSize']);
+const TEXT_ALIGN_TYPES = new Set(['paragraph', 'heading']);
 
 function nativeMarksToTiptap(marks) {
     if (!Array.isArray(marks)) {
@@ -100,16 +101,20 @@ function mapNode(node, direction) {
         mapped.type = 'bulletList';
     } else if (direction === 'toNative' && mapped.type === 'bulletList') {
         mapped.type = 'unorderedList';
+    } else if (direction === 'toNative' && mapped.type === 'tableHeader') {
+        mapped.type = 'tableCell';
     }
 
     if (mapped.attrs && typeof mapped.attrs === 'object') {
         mapped.attrs = {...mapped.attrs};
-        if (direction === 'toTiptap' && Object.prototype.hasOwnProperty.call(mapped.attrs, 'align')) {
-            mapped.attrs.textAlign = mapped.attrs.align;
-            delete mapped.attrs.align;
-        } else if (direction === 'toNative' && Object.prototype.hasOwnProperty.call(mapped.attrs, 'textAlign')) {
-            mapped.attrs.align = mapped.attrs.textAlign;
-            delete mapped.attrs.textAlign;
+        if (TEXT_ALIGN_TYPES.has(mapped.type)) {
+            if (direction === 'toTiptap' && Object.prototype.hasOwnProperty.call(mapped.attrs, 'align')) {
+                mapped.attrs.textAlign = mapped.attrs.align;
+                delete mapped.attrs.align;
+            } else if (direction === 'toNative' && Object.prototype.hasOwnProperty.call(mapped.attrs, 'textAlign')) {
+                mapped.attrs.align = mapped.attrs.textAlign;
+                delete mapped.attrs.textAlign;
+            }
         }
     }
 
@@ -136,11 +141,9 @@ export function fromNativeDocument(documentJson) {
     if (documentJson === null || typeof documentJson !== 'object' || Array.isArray(documentJson)) {
         throw new TypeError('Native document must be an object');
     }
-
     if (documentJson.type === 'doc') {
         return mapNode(documentJson, 'toTiptap');
     }
-
     if (documentJson.type !== 'worksheet') {
         throw new TypeError(`Unsupported document root: ${documentJson.type}`);
     }
@@ -150,7 +153,6 @@ export function fromNativeDocument(documentJson) {
     if (!Array.isArray(documentJson.content)) {
         throw new TypeError('Native document content must be an array');
     }
-
     return mapNode({type: 'doc', content: documentJson.content}, 'toTiptap');
 }
 
@@ -158,7 +160,6 @@ export function toNativeDocument(prosemirrorJson, {version = 1, meta = undefined
     if (prosemirrorJson === null || typeof prosemirrorJson !== 'object' || Array.isArray(prosemirrorJson) || prosemirrorJson.type !== 'doc') {
         throw new TypeError('ProseMirror document must have doc root');
     }
-
     const normalized = mapNode(prosemirrorJson, 'toNative');
     const result = {
         type: 'worksheet',
