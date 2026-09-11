@@ -11,16 +11,62 @@
 }
 
 .dgn-editor .dgn-official-toolbar {
-    display: flex;
-    align-items: stretch;
-    gap: 0;
     width: 100%;
-    padding: .45rem .55rem .35rem;
-    overflow-x: auto;
+    overflow: hidden;
     background: var(--bs-body-bg, #fff);
     border: 1px solid var(--bs-border-color, #dee2e6);
     border-radius: .65rem;
     box-shadow: 0 3px 12px rgba(31,41,55,.08);
+}
+
+.dgn-editor .dgn-toolbar-tabs {
+    display: flex;
+    align-items: center;
+    gap: .15rem;
+    padding: .25rem .4rem 0;
+    border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+    overflow-x: auto;
+}
+
+.dgn-editor .dgn-toolbar-tab {
+    appearance: none;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    padding: .55rem .8rem .48rem;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.dgn-editor .dgn-toolbar-tab:hover,
+.dgn-editor .dgn-toolbar-tab:focus-visible {
+    background: var(--bs-tertiary-bg, #f4f6f8);
+    outline: none;
+}
+
+.dgn-editor .dgn-toolbar-tab.is-active,
+.dgn-editor .dgn-toolbar-tab[aria-selected="true"] {
+    border-bottom-color: #0d6efd;
+    color: #0d6efd;
+    font-weight: 600;
+}
+
+.dgn-editor .dgn-toolbar-panels {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.dgn-editor .dgn-toolbar-panel {
+    display: flex;
+    align-items: stretch;
+    min-width: max-content;
+    padding: .45rem .55rem .35rem;
+}
+
+.dgn-editor .dgn-toolbar-panel[hidden] {
+    display: none !important;
 }
 
 .dgn-editor .dgn-toolbar-group {
@@ -70,7 +116,7 @@
 .dgn-editor .dgn-toolbar-button {
     min-width: 2.1rem;
     min-height: 2.1rem;
-    padding: .35rem .5rem;
+    padding: .35rem .55rem;
     line-height: 1.15;
     cursor: pointer;
     white-space: nowrap;
@@ -107,10 +153,31 @@
 
 .dgn-editor .dgn-canvas-host {
     width: 100%;
+    zoom: var(--dgn-zoom, 1);
 }
 
 .dgn-editor .dgn-canvas {
+    box-sizing: border-box;
+    width: 210mm;
+    max-width: 100%;
+    min-height: 297mm;
+    margin: 1rem auto;
+    padding: 20mm;
     outline: none;
+    background: #fff;
+}
+
+.dgn-editor[data-orientation="landscape"] .dgn-canvas {
+    width: 297mm;
+    min-height: 210mm;
+}
+
+.dgn-editor[data-margin="narrow"] .dgn-canvas {
+    padding: 10mm;
+}
+
+.dgn-editor[data-margin="wide"] .dgn-canvas {
+    padding: 28mm;
 }
 
 .dgn-editor .dgn-canvas p,
@@ -131,24 +198,13 @@
 }
 
 .dgn-editor .dgn-canvas [style*="text-align: left"],
-.dgn-preview [style*="text-align: left"] {
-    text-align: left;
-}
-
+.dgn-preview [style*="text-align: left"] { text-align: left; }
 .dgn-editor .dgn-canvas [style*="text-align: center"],
-.dgn-preview [style*="text-align: center"] {
-    text-align: center;
-}
-
+.dgn-preview [style*="text-align: center"] { text-align: center; }
 .dgn-editor .dgn-canvas [style*="text-align: right"],
-.dgn-preview [style*="text-align: right"] {
-    text-align: right;
-}
-
+.dgn-preview [style*="text-align: right"] { text-align: right; }
 .dgn-editor .dgn-canvas [style*="text-align: justify"],
-.dgn-preview [style*="text-align: justify"] {
-    text-align: justify;
-}
+.dgn-preview [style*="text-align: justify"] { text-align: justify; }
 
 .dgn-editor .dgn-answer,
 .dgn-preview .dgn-answer {
@@ -171,10 +227,48 @@
     border-radius: .375rem;
 }
 
+.dgn-editor .dgn-image[data-asset-url] {
+    min-height: 6rem;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+}
+
+.dgn-editor .dgn-page-break,
+.dgn-preview .dgn-page-break {
+    height: 0;
+    margin: 1.5rem 0;
+    border-top: 2px dashed #adb5bd;
+    break-after: page;
+}
+
 @media (max-width: 900px) {
-    .dgn-editor .dgn-official-toolbar {
-        position: static;
-    }
+    .dgn-editor .dgn-official-toolbar-host { position: static; }
+    .dgn-editor .dgn-canvas { padding: 8mm; }
+}
+
+@media print {
+    .dgn-official-toolbar-host,
+    .wslib-editor-topbar,
+    .wslib-editor-hero,
+    .wslib-editor-inspector,
+    .wslib-native-editor-head,
+    .wslib-modal,
+    #page-header,
+    header.navbar,
+    footer,
+    .drawer-toggles,
+    .floating-buttons-wrapper { display: none !important; }
+
+    .wslib-editor-workspace,
+    .wslib-editor-main,
+    .wslib-paper-stage,
+    .wslib-native-editor-shell,
+    .wslib-native-editor,
+    .dgn-editor,
+    .dgn-canvas-host { width: 100% !important; margin: 0 !important; padding: 0 !important; background: #fff !important; border: 0 !important; box-shadow: none !important; zoom: 1 !important; }
+
+    .dgn-editor .dgn-canvas { margin: 0 auto !important; box-shadow: none !important; }
 }
 
 /* DIGIERA_NATIVE_OFFICIAL_TIPTAP_UI_END */

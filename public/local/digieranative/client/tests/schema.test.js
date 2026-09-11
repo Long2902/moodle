@@ -74,6 +74,7 @@ describe('DIGIERA Native V1 schema parity', () => {
         const expectedMarks = [
             'bold',
             'italic',
+            'link',
             'strike',
             'textColor',
             'underline',
@@ -118,12 +119,16 @@ describe('DIGIERA Native V1 attribute parity', () => {
         }
     });
 
-    it('allows attrs only on the textColor mark', async () => {
+    it('matches the server-approved mark attrs', async () => {
         const native = await import('../src/schema.js');
 
         expect(
             Object.keys(native.schema.marks.textColor.spec.attrs ?? {}).sort(),
         ).toEqual(['color']);
+
+        expect(
+            Object.keys(native.schema.marks.link.spec.attrs ?? {}).sort(),
+        ).toEqual(['class', 'href', 'rel', 'target']);
 
         for (const name of ['bold', 'italic', 'underline', 'strike']) {
             expect(

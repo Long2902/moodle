@@ -1,6 +1,7 @@
 define(['local_digieranative/native_editor'], function(NativeEditor) {
     const modalSelector = name => `[data-modal="${name}"]`;
     let latestNativeJson = null;
+    let latestAssetUrls = {};
 
     const openModal = name => {
         const modal = document.querySelector(modalSelector(name));
@@ -58,11 +59,11 @@ define(['local_digieranative/native_editor'], function(NativeEditor) {
             </div>`;
     };
 
-    const currentNativeJson = () => {
-        if (latestNativeJson) {
-            return latestNativeJson;
-        }
-        return document.querySelector('[data-region="native-editor"]')?._wslibNativeJson || null;
+    const editorElement = () => document.querySelector('[data-region="native-editor"]');
+    const currentNativeJson = () => latestNativeJson || editorElement()?._wslibNativeJson || null;
+    const currentAssetUrls = () => {
+        const mounted = editorElement()?._wslibAssetUrls || {};
+        return {...mounted, ...latestAssetUrls};
     };
 
     const populatePublishPreview = () => {
@@ -71,13 +72,16 @@ define(['local_digieranative/native_editor'], function(NativeEditor) {
         if (!target || !nativejson) {
             return;
         }
-        NativeEditor.renderPreview(nativejson, target);
+        NativeEditor.renderPreview(nativejson, target, currentAssetUrls());
     };
 
     const init = () => {
         document.addEventListener('wslib:native-document', event => {
             if (event.detail?.nativejson) {
                 latestNativeJson = event.detail.nativejson;
+            }
+            if (event.detail?.asseturls) {
+                latestAssetUrls = {...event.detail.asseturls};
             }
         });
 

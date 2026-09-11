@@ -105,6 +105,9 @@ final class version_service {
         ]);
         if ($base) {
             file_service::clone_file((int)$base->id, $versionid);
+            if ($item->kind === 'native') {
+                native_asset_service::clone_assets((int)$base->id, $versionid);
+            }
         }
         return $DB->get_record('wslib_version', ['id' => $versionid], '*', MUST_EXIST);
     }
@@ -125,7 +128,11 @@ final class version_service {
             }
             $document = \local_digieranative\document\validator::validate_json((string)$version->nativejson);
             $version->schemaversion = (int)$document['version'];
-            $version->renderedhtml = \local_digieranative\document\renderer::render_json((string)$version->nativejson, 'preview');
+            $version->renderedhtml = \local_digieranative\document\renderer::render_json(
+                (string)$version->nativejson,
+                'preview',
+                native_asset_service::asset_urls($versionid)
+            );
             $version->contenthash = hash('sha256', (string)$version->nativejson);
         }
         $version->state = 'published';
@@ -173,6 +180,9 @@ final class version_service {
                 $draft->id
             );
             file_service::clone_file((int)$sourceversion->id, (int)$draft->id);
+            if ($source->kind === 'native') {
+                native_asset_service::clone_assets((int)$sourceversion->id, (int)$draft->id);
+            }
             self::publish((int)$draft->id, $userid);
         }
         return $newitemid;
