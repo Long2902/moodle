@@ -6,6 +6,7 @@ on:
       - feature/digiera-media-v1-rc1-fasttrack
       - feature/digiera-media-v1-rc1-versioning
       - feature/digiera-media-v1-rc1-lifecycle
+      - feature/digiera-media-v1-rc1-recent-permissions
     paths:
       - 'public/local/digieramedia/**'
       - 'public/filter/digieramedia/**'
@@ -16,6 +17,7 @@ on:
       - '.digiera/tools/digiera-media-rc1-versioning-deploy.sh'
       - '.digiera/tools/digiera-media-rc1-reference-state-deploy.sh'
       - '.digiera/tools/digiera-media-rc1-lifecycle-deploy.sh'
+      - '.digiera/tools/digiera-media-rc1-recent-permissions-deploy.sh'
       - '.digiera/rc1/**'
       - '.github/workflows/digiera-media-rc1.yml'
   workflow_dispatch:
@@ -62,6 +64,9 @@ jobs:
           bash -n .digiera/tools/digiera-media-rc1-reference-state-deploy.sh
           if test -f .digiera/tools/digiera-media-rc1-lifecycle-deploy.sh; then
             bash -n .digiera/tools/digiera-media-rc1-lifecycle-deploy.sh
+          fi
+          if test -f .digiera/tools/digiera-media-rc1-recent-permissions-deploy.sh; then
+            bash -n .digiera/tools/digiera-media-rc1-recent-permissions-deploy.sh
           fi
           find public/local/digieramedia public/filter/digieramedia public/lib/editor/tiny/plugins/digieramedia -type f -name '*.php' -print0 | sort -z | xargs -0 -r -n1 php -l
           find public/lib/editor/tiny/plugins/digieramedia/amd/src -type f -name '*.js' -print0 | sort -z | xargs -0 -r -n1 node --check
@@ -121,6 +126,9 @@ jobs:
           set -euo pipefail
           tests=(
             public/local/digieramedia/tests/schema_test.php
+            public/local/digieramedia/tests/recent_service_test.php
+            public/local/digieramedia/tests/recent_external_test.php
+            public/local/digieramedia/tests/permission_matrix_test.php
             public/local/digieramedia/tests/backup_manifest_test.php
             public/local/digieramedia/tests/reference_remapper_test.php
             public/local/digieramedia/tests/independent_copy_test.php
