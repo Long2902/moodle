@@ -226,6 +226,7 @@ final class lifecycle_service {
                 'timemodified' => $finished,
                 'modifiedby' => $userid,
             ]);
+            $DB->delete_records('local_digieramedia_recent', ['mediaid' => (int)$media->id]);
             $this->audit(
                 $userid,
                 $context,
