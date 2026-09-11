@@ -4,7 +4,11 @@ import {createRoot} from 'react-dom/client';
 import {useEditorState} from '@tiptap/react';
 import {Editor} from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
+import Color from '@tiptap/extension-color';
+import Highlight from '@tiptap/extension-highlight';
+import {TableKit} from '@tiptap/extension-table';
 import TextAlign from '@tiptap/extension-text-align';
+import {TextStyle, FontFamily, FontSize} from '@tiptap/extension-text-style';
 
 // Frozen low-level state factory retained for command/schema regression tests during migration.
 import {history} from 'prosemirror-history';
@@ -13,6 +17,7 @@ import {baseKeymap} from 'prosemirror-commands';
 import {EditorState} from 'prosemirror-state';
 
 import {fromNativeDocument, toNativeDocument} from './document_adapter.js';
+import {assertImageAdapter, insertPictureAsset, updatePictureAsset} from './image_adapter.js';
 import {keyboardBindings} from './keyboard.js';
 import {createPasteHandler} from './paste.js';
 import {schema} from './schema.js';
@@ -69,6 +74,7 @@ export function mount(config = {}) {
         print = null,
         downloadPdf = null,
         uploadImage = null,
+        imageAdapter = null,
         requestMath = null,
         assetUrls = {},
         documentJson = {type: 'worksheet', version: 1, content: []},
@@ -78,6 +84,7 @@ export function mount(config = {}) {
         throw new TypeError('Editor element must be a DOM element');
     }
 
+    const boundImageAdapter = assertImageAdapter(imageAdapter);
     const source = documentJson.type === 'worksheet'
         ? documentJson
         : {type: 'worksheet', version: 1, content: documentJson.content || []};
@@ -157,7 +164,13 @@ export function mount(config = {}) {
                 },
                 trailingNode: false,
             }),
-            TextAlign.configure({types: ['heading', 'paragraph']}),
+            TextStyle,
+            FontFamily,
+            FontSize,
+            Color,
+            Highlight.configure({multicolor: true}),
+            TextAlign.configure({types: ['heading', 'paragraph', 'tableCell']}),
+            TableKit.configure({table: {resizable: true}}),
             ...createDigieraExtensions(),
         ],
         editorProps: {
@@ -175,6 +188,21 @@ export function mount(config = {}) {
     editor.updateNativeLayout = updateLayout;
     editor.refreshAssetPreviews = refreshAssetPreviews;
     editor.getAssetUrls = () => ({...runtimeAssetUrls});
+    editor.insertPictureAsset = options => insertPictureAsset(editor, boundImageAdapter, options);
+    editor.updatePictureAsset = (assetKey, edits = {}, file = null) =>
+        updatePictureAsset(editor, boundImageAdapter, assetKey, edits, file);
+    editor.openPictureEditor = (detail = {}) => {
+        const EventClass = document.defaultView.CustomEvent;
+        element.dispatchEvent(new EventClass('digiera-native:open-picture-editor', {
+            bubbles: true,
+            detail: {
+                editor,
+                capturedPos: editor.state.selection.from,
+                ...detail,
+            },
+        }));
+        return true;
+    };
     refreshAssetPreviews();
 
     const reactRoot = createRoot(toolbarHost);
@@ -187,6 +215,7 @@ export function mount(config = {}) {
             print,
             downloadPdf,
             uploadImage,
+            imageAdapter: boundImageAdapter,
             requestMath,
             updateLayout,
             initialLayout: metadata.layout,
