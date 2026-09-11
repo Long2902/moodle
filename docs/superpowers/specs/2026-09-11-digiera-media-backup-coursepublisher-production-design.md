@@ -102,13 +102,13 @@ Course Publisher must never update DIGIERA Media tables directly and must never 
 
 Course Publisher must continue to operate when `local_digieramedia` is not installed.
 
-The integration uses a small optional class boundary, conceptually:
+The integration uses this optional class boundary:
 
 `\local_digieramedia\integration\coursepublisher_bridge`
 
 Course Publisher checks `class_exists()` before using it. If DIGIERA is absent, backup/restore executes exactly as Course Publisher 1.1.1 does today.
 
-If DIGIERA exists, the bridge executes a callback inside a process-local clone-policy scope:
+If DIGIERA exists, the bridge executes a callback inside a process-local clone-policy scope containing:
 
 - selected clone mode;
 - stable restore/publish operation id;
@@ -207,6 +207,8 @@ The backup manifest must not contain:
 
 `pinned_version_no` from the v1 manifest is superseded by the unambiguous `effective_version_no` contract. Restore compatibility code may read the old field for older same-site backups if necessary, but new backups write v2.
 
+The manifest is portable inside the same DIGIERA logical Media catalog. Cross-site binary transport into an unrelated Moodle installation is explicitly outside this batch.
+
 ## 8. Clone-mode semantics
 
 ### 8.1 SHARED_FOLLOW — default
@@ -248,7 +250,7 @@ Target behavior:
 - new Reference UUID;
 - server-side R2 COPY of the source effective version;
 - HEAD verification of the copied target object;
-- target reference preserves FOLLOW/PIN intent using the new independent Version where appropriate.
+- target reference preserves the source FOLLOW/PIN intent using the new independent Version.
 
 Within one publish/restore operation and one target course, the same source Media/effective-version pair maps to one independent target Media/Version and is reused by all restored References in that operation. This prevents duplicate R2 copies when the same Media appears in multiple activities or Book chapters.
 
@@ -302,7 +304,9 @@ Required behavior:
 
 ## 12. Course Publisher UI and durable policy
 
-Course Publisher adds a Vietnamese-first selector labeled conceptually `Xử lý học liệu DIGIERA` to both single-publish and Batch flows.
+Course Publisher adds the exact Vietnamese selector label `Xử lý học liệu DIGIERA` to both the single-publish screen in `publish.php` and the Batch form in `classes/form/batch_form.php`.
+
+English language string: `DIGIERA media handling`.
 
 Values:
 
@@ -314,7 +318,7 @@ The selector is safe even if the source contains no DIGIERA markers; it simply h
 
 ### 12.1 Durable schema
 
-Add a `digieramode` char field with default `shared_follow` to:
+Add `digieramode` as `char(32)` with default `shared_follow` to:
 
 - `local_cp_job`
 - `local_cp_batch`
@@ -342,7 +346,7 @@ For:
 
 Course Publisher executes the Moodle backup/restore controllers inside the optional DIGIERA bridge scope.
 
-A stable integration operation id derives from the durable Course Publisher job plus target context. Retry of the same job uses the same operation id; a different target/job uses a different id.
+A stable integration operation id derives from the durable Course Publisher job plus target course. All activity restores belonging to that one job reuse the same operation id, which is required so Independent mode can deduplicate one source Media across multiple restored activities. Retry of the same job uses the same operation id; a different target/job uses a different id.
 
 ## 13. Course Publisher paths that must remain unchanged
 
@@ -424,6 +428,8 @@ At minimum:
 - Book with two chapters;
 - one normal activity whose `intro` contains DIGIERA marker.
 
+The default no-scope path must prove SHARED_FOLLOW. Programmatic integration tests may open an explicit clone-policy scope to exercise SHARED_PINNED and INDEPENDENT through the same real Moodle backup/restore controllers without adding a new Moodle Core restore UI setting.
+
 Real restore acceptance verifies:
 
 - source Reference UUID is not reused;
@@ -452,14 +458,14 @@ After CI and two-node deployment, operator acceptance is required.
 
 ### 16.1 Moodle native restore
 
-Using disposable targets:
+Using disposable targets and the normal Moodle backup/restore flow with no Course Publisher bridge scope:
 
 - Page SHARED_FOLLOW PASS;
 - Label SHARED_FOLLOW PASS;
 - Book Chapter SHARED_FOLLOW PASS;
-- generic intro SHARED_FOLLOW PASS;
-- at least one SHARED_PINNED restore verifies later source Media replacement does not change target rendering;
-- one Independent restore verifies a real new R2 object exists and target remains independent from subsequent source replacement.
+- generic intro SHARED_FOLLOW PASS.
+
+Native Moodle restore has no new DIGIERA mode selector in this batch; its frozen default is SHARED_FOLLOW. Live SHARED_PINNED and INDEPENDENT acceptance is performed through Course Publisher, which is the operator-facing mode selector in scope.
 
 ### 16.2 Course Publisher single Activity
 
@@ -470,6 +476,10 @@ Publish a generic activity containing DIGIERA Media into a disposable target usi
 - INDEPENDENT.
 
 Verify placement and existing Course Publisher postconditions still pass.
+
+For SHARED_PINNED, replace the source Media after publication and confirm the published target remains on the snapshotted version.
+
+For INDEPENDENT, verify a real new R2 object exists and later replacement of the source Media does not change the published target Media.
 
 ### 16.3 Course Publisher normal Section
 
@@ -509,7 +519,13 @@ This batch changes two local plugins and must deploy them as one coordinated rel
 
 ### 18.1 Source handling
 
-The supplied Course Publisher 1.1.1 artifact becomes the frozen source baseline for the integration branch. Only integration-required modifications are allowed; unrelated Course Publisher refactors are out of scope.
+The supplied Course Publisher 1.1.1 artifact is the frozen source baseline for this integration. Before product edits, its `coursepublisher/` tree is imported unchanged into the isolated branch at:
+
+`public/local/coursepublisher/`
+
+The import commit must record the source ZIP SHA256 `71e0b1334bf73c378a7c6986676069930188a99e55060af1baa3aa31794bdffb`.
+
+After that baseline import, only integration-required modifications are allowed; unrelated Course Publisher refactors are out of scope.
 
 ### 18.2 Versioning
 
@@ -570,6 +586,7 @@ Out of scope:
 - cross-site restore to a different Moodle installation with no matching logical Media catalog;
 - multipart upload work;
 - UI redesign of DIGIERA Modal A;
+- a new native Moodle restore UI for choosing DIGIERA clone mode;
 - new Course Publisher topology/discovery features.
 
 ## 21. Definition of Done
@@ -579,13 +596,13 @@ The batch is complete only when all of the following are true:
 1. marker-driven portable manifest v2 is GREEN;
 2. Page/Label/Book/generic-intro adapters are GREEN;
 3. SHARED_FOLLOW real Moodle restore is GREEN;
-4. SHARED_PINNED real Moodle restore is GREEN;
-5. INDEPENDENT real restore service/path is GREEN and idempotent;
+4. SHARED_PINNED real-controller integration tests are GREEN;
+5. INDEPENDENT real-controller/service path is GREEN and idempotent;
 6. Course Publisher 1.1.1 integration policy is durably propagated through direct job, Batch and subsection paths;
 7. full DIGIERA/Course Publisher CI is GREEN;
 8. two-node pinned deploy helper PASSes;
-9. Moodle native browser acceptance PASSes;
-10. Course Publisher single Activity PASSes;
+9. Moodle native SHARED_FOLLOW browser acceptance PASSes;
+10. Course Publisher single Activity PASSes in all three modes;
 11. normal Section PASSes;
 12. Batch fan-out PASSes;
 13. delegated subsection PASSes;
