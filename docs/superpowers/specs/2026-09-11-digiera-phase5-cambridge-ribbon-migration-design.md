@@ -26,7 +26,7 @@ Current production canonical source after the last verified deploy:
 
 `1b698d6a7b45a7200661df1305761910066fabcf`
 
-Current Phase 5 development/spec branch at the time this design is written:
+Current Phase 5 development/spec branch:
 
 `digiera/tiptap-v1-phase5-official-ui`
 
@@ -115,7 +115,7 @@ The target visual language is the compact Tiptap DOCX-editor style shown by the 
 - disabled state based on `editor.can()` where available,
 - keyboard shortcuts remain Tiptap-native.
 
-The initial control set is intentionally practical and is derived from the working CambridgePlus ribbon.
+The initial control set is derived from the working CambridgePlus ribbon.
 
 ### Editing
 
@@ -142,20 +142,27 @@ The initial control set is intentionally practical and is derived from the worki
 
 - Bullet list
 - Ordered list
-- Decrease indent
-- Increase indent
+- Decrease list indent
+- Increase list indent
 - Align left
 - Align center
 - Align right
 - Justify
 
+Paragraph indent outside lists is not introduced by this migration.
+
 ### Insert
 
 - Insert Picture
 - Link / unlink
-- Table insertion and basic row/column operations if compatible with current Native schema
+- Insert table
+- Add/delete row
+- Add/delete column
+- Delete table
 - Horizontal rule
 - Page break
+
+Table insertion must use `withHeaderRow: false` because current Native V1 has `table/tableRow/tableCell` but no `tableHeader`. No client-only `tableHeader` node may be persisted.
 
 ### File/document actions
 
@@ -170,7 +177,7 @@ The initial control set is intentionally practical and is derived from the worki
 - normal / narrow / wide margins
 - zoom
 
-Layout persistence continues in Native root `meta.layout`. Zoom remains view-only unless an explicit later requirement changes that.
+Layout persistence continues in Native root `meta.layout`. Zoom is view-only and is not written to Native JSON.
 
 ## 5. DIGIERA controls
 
@@ -184,7 +191,7 @@ DIGIERA-specific authoring remains a dedicated control group integrated into the
 
 There will no longer be a second independent image implementation under DIGIERA. `Insert Picture` is the single image entry point for both generic worksheet content and DIGIERA-authored question content.
 
-Smart-answer rules remain:
+Smart-answer rules:
 
 1. if selection is inside a question, bind the answer node to that question;
 2. otherwise use the nearest valid preceding question;
@@ -193,14 +200,47 @@ Smart-answer rules remain:
 
 Every action must either change editor state, open an interaction, or show a visible error.
 
-## 6. Image architecture
+## 6. Native text-style persistence contract
 
-The CambridgePlus image interaction model is retained because it already solves the UX problems the user prefers:
+CambridgePlus uses Tiptap `TextStyle`, `FontFamily`, `FontSize`, `Color` and `Highlight`. DIGIERA Native must not persist Tiptap-internal `textStyle` marks directly.
+
+The Native adapter will map Tiptap style state to explicit Native marks:
+
+- existing `textColor {color}` remains the canonical color mark,
+- add `fontFamily {family}`,
+- add `fontSize {px}`,
+- add `highlight {color}`.
+
+Server PHP schema, validator and renderer must add the same three mark types in the same change.
+
+Exact validation:
+
+- `fontFamily.family` allowlist: `Arial`, `Calibri`, `Georgia`, `Times New Roman`, `Verdana`;
+- `fontSize.px` allowlist: `10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36`;
+- `textColor.color` and `highlight.color`: exactly `#RRGGBB` hexadecimal;
+- unset/default style is represented by absence of the corresponding Native mark.
+
+Adapter rule:
+
+```text
+Tiptap textStyle.color      <-> Native textColor.color
+Tiptap textStyle.fontFamily <-> Native fontFamily.family
+Tiptap textStyle.fontSize   <-> Native fontSize.px
+Tiptap highlight.color      <-> Native highlight.color
+```
+
+The renderer must emit escaped inline styles/classes only from these validated values. No arbitrary CSS value may be persisted.
+
+This is a Native JSON schema extension only and does not require a database schema change.
+
+## 7. Image architecture
+
+The CambridgePlus image interaction model is retained:
 
 1. capture current editor caret/selection position,
 2. choose a local image,
 3. decode dimensions,
-4. open picture editor,
+4. open Picture Editor,
 5. allow crop/layout/alt/caption operations,
 6. create or replace the asset,
 7. insert/update the structural image node at the captured location,
@@ -210,7 +250,7 @@ The CambridgePlus persistence implementation is **not** copied as-is.
 
 ### Moodle ImageAdapter
 
-A new Moodle-facing adapter provides the same conceptual interface as CambridgePlus `RibbonImageContext`:
+A Moodle-facing adapter provides the same conceptual interface as CambridgePlus `RibbonImageContext`:
 
 ```text
 createAsset(file)
@@ -223,36 +263,52 @@ Teacher worksheet context maps these operations to Moodle/DIGIERA worksheet file
 
 Student attempt context maps them to attempt-scoped Moodle/DIGIERA file storage.
 
-Native document nodes continue to store a stable logical `assetKey`, never raw binary and never a transient blob URL.
+Native document nodes store a stable logical `assetKey`, never raw binary and never a transient blob URL.
 
 Preview URLs are runtime-only and must never become canonical document data.
 
-### Image node metadata
+### Exact Native image persistence
 
-The migration may extend the existing Native image node only where required to preserve the approved CambridgePlus image UX. Candidate fields include:
+The existing Native `image` node remains the only image node. It is extended to preserve CambridgePlus picture-edit semantics with these attributes:
 
-- assetKey
-- alt
-- title/caption
-- width/widthPercent
-- align
-- crop metadata
-- rotation
+- `assetKey`: required stable logical asset identifier;
+- `alt`: bounded text;
+- `title`: existing optional title retained for backward compatibility;
+- `caption`: bounded text;
+- `width`: existing optional integer retained for backward compatibility;
+- `widthPercent`: integer `10..100`, default `100`;
+- `align`: `left | center | right`, default `center` for newly inserted Cambridge-style images;
+- `cropX`: number `0..1`, default `0`;
+- `cropY`: number `0..1`, default `0`;
+- `cropW`: number `0..1`, default `1`;
+- `cropH`: number `0..1`, default `1`;
+- `rotation`: one of `0 | 90 | 180 | 270`, default `0`.
 
-Any new Native attribute requires synchronized changes in:
+Cross-field crop validation must require:
 
-- JS schema,
-- PHP server schema/validator,
+- `cropW > 0`,
+- `cropH > 0`,
+- `cropX + cropW <= 1`,
+- `cropY + cropH <= 1`.
+
+For old image nodes missing the new attributes, the adapter/server renderer must apply safe defaults without rewriting the document merely because it was opened.
+
+Synchronized implementation is mandatory in:
+
+- JS schema/validation,
+- PHP schema/validator,
 - PHP renderer,
 - Native adapter,
+- Tiptap image extension/node view,
 - preview renderer,
+- PDF image rendering,
 - tests.
 
-No attribute may be introduced only on the client.
+No image field may exist only on the client.
 
-If the existing Native schema can represent a behavior without extension, schema expansion must be avoided.
+This is a Native JSON schema extension only and does not require a DB migration.
 
-## 7. Moodle integration boundaries
+## 8. Moodle integration boundaries
 
 The migration must not replace these existing flows:
 
@@ -267,30 +323,30 @@ The migration must not replace these existing flows:
 - grading/feedback,
 - Moodle permissions and capability checks.
 
-The new editor must plug into the same boundaries using canonical Native JSON and context-specific asset callbacks.
+The new editor plugs into the same boundaries using canonical Native JSON and context-specific asset callbacks.
 
 No direct editor code may write DB records by itself.
 
-## 8. PDF and Print
+## 9. PDF and Print
 
-The existing approved behavior remains:
+Existing approved behavior remains:
 
 - `Print` opens browser print,
 - `Download PDF` downloads a server-generated PDF directly,
 - PDF content is generated from persisted/canonical Native data rather than screenshotting editor DOM,
 - image assets are resolved server-side through the Moodle/DIGIERA asset layer,
-- current TCPDF path remains acceptable unless tests prove it cannot represent a required feature.
+- current TCPDF path remains unless tests prove it cannot represent a required feature.
 
 The DOCX-editor visual reference does not imply adoption of Tiptap Pro DOCX/PDF conversion services.
 
-## 9. Dependency policy
+## 10. Dependency policy
 
 Allowed:
 
 - Tiptap 3 packages already used or free/open packages required by the CambridgePlus ribbon,
 - React/ReactDOM bundled locally,
-- local icon package such as `lucide-react` if bundled into the Moodle AMD artifact,
-- image-editing dependency already proven by CambridgePlus if it can be bundled locally and its license is acceptable.
+- `lucide-react` bundled locally for toolbar icons,
+- `react-image-crop` bundled locally for the ported Picture Editor after license/package audit.
 
 Not allowed:
 
@@ -302,7 +358,7 @@ Not allowed:
 
 All production JS/CSS must be locally bundled.
 
-## 10. Code-port rule
+## 11. Code-port rule
 
 This migration follows a strict reuse rule:
 
@@ -321,13 +377,13 @@ Examples:
 
 The existing Phase 5 custom toolbar becomes retired compatibility code and must not remain an active second toolbar path.
 
-## 11. Migration compatibility
+## 12. Migration compatibility
 
-Existing Native worksheets produced by the current production build must reopen without manual conversion.
+Existing Native worksheets produced by current production must reopen without manual conversion.
 
 Existing published versions and existing attempts must remain readable.
 
-If image metadata is extended, old image nodes must receive safe defaults when mounted.
+Old image nodes receive runtime defaults for newly introduced picture metadata.
 
 A document opened and saved without touching a new feature must not suffer destructive normalization.
 
@@ -339,31 +395,33 @@ Hard gate:
 
 If implementation unexpectedly requires `version.php`, `db/install.xml`, or `db/upgrade.php`, stop and return to design review instead of silently adding a DB upgrade.
 
-## 12. TDD gates
+## 13. TDD gates
 
-Before implementation changes, add RED tests for the new migration contracts.
+Before implementation changes, add RED tests for these migration contracts.
 
 Required RED/GREEN coverage:
 
-1. CambridgePlus-style toolbar control contract exists and old custom active toolbar path is absent.
-2. font family and font size round-trip where supported by Native schema.
-3. color/highlight round-trip or are explicitly disabled until server parity exists; no client-only persistence.
-4. image insertion preserves captured caret/top-level semantic position.
-5. image picker -> picture edit -> Moodle asset callback -> Native image node.
-6. replace/crop/alt/caption operations update one structural image node rather than duplicate it.
-7. teacher image survives save, refresh, preview and publish.
-8. student image survives save, refresh and submit, then appears in teacher review.
-9. smart answer controls never fail silently.
-10. existing three-paragraph multiline regression remains green.
-11. links remain server-safe and survive Native round-trip.
-12. layout remains stable across rapid sequential changes.
-13. autosave and manual save use the same Native serializer.
-14. PDF renders persisted content and managed images.
-15. legacy Native documents reopen without schema loss.
+1. CambridgePlus-derived toolbar exists and old custom active toolbar path is absent.
+2. font family round-trips through Tiptap -> Native -> server -> reopen.
+3. font size round-trips through Tiptap -> Native -> server -> reopen.
+4. text color/highlight round-trip and reject arbitrary CSS values.
+5. image insertion preserves captured caret/top-level semantic position.
+6. image picker -> picture edit -> Moodle asset callback -> Native image node.
+7. replace/crop/alt/caption update one image node rather than duplicate it.
+8. old image nodes mount with safe runtime defaults and remain readable.
+9. teacher image survives save, refresh, preview, PDF and publish.
+10. student image survives save, refresh and submit, then appears in teacher review.
+11. smart answer controls never fail silently.
+12. existing three-paragraph multiline regression remains green.
+13. links remain server-safe and survive Native round-trip.
+14. layout remains stable across rapid sequential changes.
+15. autosave and manual save use the same Native serializer.
+16. table insertion never introduces unsupported `tableHeader` nodes.
+17. legacy Native documents reopen without schema loss.
 
 Full existing tests remain mandatory after focused migration tests.
 
-## 13. Build and deployment gates
+## 14. Build and deployment gates
 
 Development loop remains local on Web01 isolated source/worktree; do not wait for GitHub Actions unless specifically needed.
 
@@ -394,18 +452,19 @@ Deployment remains package-bound to both nodes:
 - restore cron active,
 - automatic code rollback on post-mutation failure.
 
-## 14. Browser acceptance
+## 15. Browser acceptance
 
-Phase 5 does not pass until browser acceptance proves all of the following:
+Phase 5 does not pass until browser acceptance proves all of the following.
 
 Teacher editor:
 
 - compact CambridgePlus-derived toolbar renders correctly,
 - no legacy custom toolbar appears,
-- font/format/list/alignment/link work,
-- Insert Picture opens picker and picture editor,
-- inserted image appears at intended document position,
-- crop/replace/alt/caption behaviors work where included,
+- font/size/color/highlight/format/list/alignment/link work,
+- table insertion/editing works without unsupported node types,
+- Insert Picture opens picker and Picture Editor,
+- image appears at intended document position,
+- crop/replace/alt/caption survive refresh,
 - save and autosave survive refresh,
 - layout survives refresh,
 - Preview matches editor semantics,
@@ -418,13 +477,14 @@ Student attempt:
 - worksheet opens,
 - editable answer behavior works,
 - student image insert works,
+- student image edit metadata persists,
 - save survives refresh,
 - submit succeeds.
 
 Teacher review:
 
 - submitted structure is immutable,
-- student image resolves,
+- student image resolves with expected crop/layout,
 - grade and feedback work.
 
 Only after these are visually verified may the project record:
@@ -434,7 +494,7 @@ PHASE5=PASS
 ALL_5_PHASES=COMPLETED
 ```
 
-## 15. Explicitly out of scope
+## 16. Explicitly out of scope
 
 This migration does not add:
 
@@ -449,7 +509,7 @@ This migration does not add:
 
 These may be separate future work and must not block this Phase 5 migration.
 
-## 16. Rollback
+## 17. Rollback
 
 The currently verified production canonical `1b698d6a7b45a7200661df1305761910066fabcf` remains the rollback baseline until the CambridgePlus-ribbon candidate passes browser acceptance.
 
