@@ -57,6 +57,19 @@ function insertContent(editor, node) {
     return editor.chain().focus().insertContent(node).run();
 }
 
+function currentTopLevelInsertPosition(editor) {
+    const {$from} = editor.state.selection;
+    if ($from.depth === 0) {
+        return editor.state.selection.to;
+    }
+    return $from.after(1);
+}
+
+function insertBlockAfterSelection(editor, node) {
+    const position = currentTopLevelInsertPosition(editor);
+    return editor.chain().focus().insertContentAt(position, node, {updateSelection: true}).run();
+}
+
 function insertSmartAnswer(editor, type, attrs) {
     let questionId = nearestPrecedingQuestionId(editor);
     if (questionId) {
@@ -126,7 +139,9 @@ export function OfficialToolbar({
     useTiptapEditorState,
 }) {
     const [activeTab, setActiveTab] = React.useState('home');
-    const [layout, setLayout] = React.useState({...DEFAULT_LAYOUT, ...(initialLayout || {})});
+    const initialLayoutValue = {...DEFAULT_LAYOUT, ...(initialLayout || {})};
+    const layoutRef = React.useRef(initialLayoutValue);
+    const [layout, setLayout] = React.useState(initialLayoutValue);
     const [zoom, setZoom] = React.useState(100);
     const state = useTiptapEditorState({
         editor,
@@ -151,7 +166,8 @@ export function OfficialToolbar({
     const disabled = readonly;
     const blockValue = state.h1 ? 'h1' : state.h2 ? 'h2' : state.h3 ? 'h3' : 'paragraph';
     const applyLayout = patch => {
-        const next = {...layout, ...patch, paper: 'A4'};
+        const next = {...layoutRef.current, ...patch, paper: 'A4'};
+        layoutRef.current = next;
         setLayout(next);
         if (typeof updateLayout === 'function') {
             updateLayout(next);
@@ -166,7 +182,7 @@ export function OfficialToolbar({
         }
     };
     const imageAction = id => commandButton({id, label: 'Ảnh', title: 'Chèn ảnh', disabled, onClick: () => {
-        const insert = attrs => insertContent(editor, {type: 'image', attrs});
+        const insert = attrs => insertBlockAfterSelection(editor, {type: 'image', attrs});
         if (typeof uploadImage === 'function') {
             uploadImage({editor, insert});
         } else {
@@ -174,7 +190,7 @@ export function OfficialToolbar({
         }
     }});
     const mathAction = () => {
-        const insert = attrs => insertContent(editor, {type: 'mathBlock', attrs});
+        const insert = attrs => insertBlockAfterSelection(editor, {type: 'mathBlock', attrs});
         if (typeof requestMath === 'function') {
             requestMath({editor, insert});
         } else {
@@ -233,7 +249,7 @@ export function OfficialToolbar({
         group('Chèn', [
             imageAction('image'),
             commandButton({id: 'horizontal-rule', label: 'Đường kẻ', disabled, onClick: () => editor.chain().focus().setHorizontalRule().run()}),
-            commandButton({id: 'page-break', label: 'Ngắt trang', disabled, onClick: () => insertContent(editor, {type: 'pageBreak'})}),
+            commandButton({id: 'page-break', label: 'Ngắt trang', disabled, onClick: () => insertBlockAfterSelection(editor, {type: 'pageBreak'})}),
             commandButton({id: 'insert-link', label: 'Liên kết', disabled, onClick: () => editLink(editor)}),
         ]),
     ];
