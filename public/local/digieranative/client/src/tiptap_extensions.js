@@ -2,9 +2,10 @@ import {Node} from '@tiptap/core';
 import {nodeSpecs} from './schema_specs.js';
 import {extendNodeSpecs} from './native_schema_extensions.js';
 
-const PROVIDED_BY_STARTER = new Set([
+const PROVIDED_EXTERNALLY = new Set([
     'doc', 'paragraph', 'heading', 'orderedList', 'listItem',
     'horizontalRule', 'text', 'hardBreak',
+    'table', 'tableRow', 'tableCell',
 ]);
 
 function attributesFromSpec(spec) {
@@ -42,7 +43,7 @@ export function createDigieraExtensions() {
     const extensions = [];
     const extendedNodes = extendNodeSpecs(nodeSpecs);
     for (const [name, spec] of Object.entries(extendedNodes)) {
-        if (!PROVIDED_BY_STARTER.has(name) && name !== 'unorderedList') {
+        if (!PROVIDED_EXTERNALLY.has(name) && name !== 'unorderedList') {
             extensions.push(nodeExtension(name, spec));
         }
     }
