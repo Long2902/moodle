@@ -130,9 +130,40 @@ The helper:
 
 The helper itself performs no R2 object mutation: `R2_MUTATION=NONE`.
 
+## Live two-node deployment evidence
+
+Deployment executed on Web01 on 2026-09-11 and completed successfully against product pin `9919b0801ab2e3a1dd29bd9fc25506ccecd07c28`.
+
+Observed deployment evidence:
+
+- Web02 SSH precheck PASS
+- Moodle CLI PASS on Web01 and Web02 with dataroot `/mnt/moodledata`
+- Recent/Permissions source contract PASS
+- staged Web02 payload identity PASS
+- pre-deploy snapshots created on both nodes:
+  - Web01: `/root/DIGIERA_MEDIA_PRE_RECENT_PERMISSIONS_WEB01_20260911-110941.tgz`
+  - Web02: `/root/DIGIERA_MEDIA_PRE_RECENT_PERMISSIONS_WEB02_20260911-110941.tgz`
+- maintenance mode enabled before install and disabled after verification
+- Web01 bounded files PASS
+- Web02 bounded files PASS
+- Moodle CLI upgrade PASS as `www-data`
+- database contract PASS:
+  - local plugin version `2026091001`
+  - Recent table present
+  - `(userid, mediaid)` index present
+  - `(userid, lastusedat)` index present
+  - global upgrade entrypoint present
+- Moodle cache purge and PHP-FPM refresh PASS
+- two-node deployed file parity PASS
+- helper terminal status: `DIGIERA_RECENT_PERMISSIONS_DEPLOY=PASS`
+- helper terminal version: `LOCAL_VERSION=2026091001`
+- R2 mutation: `NONE`
+
+This is sufficient to mark the bounded payload **deployed on Web01/Web02**. It is not yet browser-verified; production verification remains gated on the live acceptance sequence below.
+
 ## Required live acceptance after deployment
 
-Deployment is not considered production-verified until the helper ends with `DIGIERA_RECENT_PERMISSIONS_DEPLOY=PASS` and browser smoke is completed.
+Deployment is not considered production-verified until browser smoke is completed.
 
 Browser smoke sequence:
 
@@ -145,4 +176,4 @@ Browser smoke sequence:
 7. KTV can replace/manage versions/trash/restore/manage visibility, but purge remains denied unless explicitly granted.
 8. Manager purge remains opt-in/default denied.
 
-Only after evidence from the two-node helper and browser acceptance may this checkpoint be followed by a `deployed/verified` checkpoint.
+Only after browser acceptance evidence may this checkpoint be followed by a `deployed/verified` checkpoint.
