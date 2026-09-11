@@ -57,6 +57,16 @@ function tiptapMarksToNative(marks) {
     return result;
 }
 
+function runtimeLegacyImageAttrs(original) {
+    const runtime = {...original};
+    for (const [key, value] of Object.entries(LEGACY_IMAGE_RUNTIME_DEFAULTS)) {
+        if (runtime[key] === undefined || runtime[key] === null) {
+            runtime[key] = value;
+        }
+    }
+    return runtime;
+}
+
 function imageToTiptapAttrs(attrs) {
     const original = attrs && typeof attrs === 'object' ? {...attrs} : {};
     const hasCambridgeMetadata = [
@@ -66,8 +76,7 @@ function imageToTiptapAttrs(attrs) {
         return original;
     }
     return {
-        ...original,
-        ...LEGACY_IMAGE_RUNTIME_DEFAULTS,
+        ...runtimeLegacyImageAttrs(original),
         _nativeLegacyAttrs: original,
     };
 }
@@ -77,14 +86,13 @@ function imageToNativeAttrs(attrs) {
     const legacy = source._nativeLegacyAttrs;
     delete source._nativeLegacyAttrs;
     if (legacy && typeof legacy === 'object') {
-        const matchesDefaults = Object.entries(LEGACY_IMAGE_RUNTIME_DEFAULTS).every(([key, value]) => source[key] === value);
-        const unchangedOriginals = Object.entries(legacy).every(([key, value]) => source[key] === value);
+        const runtimeBaseline = runtimeLegacyImageAttrs(legacy);
+        const unchangedRuntime = Object.entries(runtimeBaseline).every(([key, value]) => source[key] === value);
         const extraMeaningful = Object.keys(source).some((key) =>
-            !Object.prototype.hasOwnProperty.call(legacy, key) &&
-            !Object.prototype.hasOwnProperty.call(LEGACY_IMAGE_RUNTIME_DEFAULTS, key) &&
+            !Object.prototype.hasOwnProperty.call(runtimeBaseline, key) &&
             source[key] !== null && source[key] !== undefined && source[key] !== ''
         );
-        if (matchesDefaults && unchangedOriginals && !extraMeaningful) {
+        if (unchangedRuntime && !extraMeaningful) {
             return {...legacy};
         }
     }
