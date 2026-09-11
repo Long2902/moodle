@@ -51,9 +51,11 @@ grep -Fq 'Xác nhận xóa vĩnh viễn' "$TINY/amd/src/ui.js" || fail 'irrevers
 ! grep -R -E "secretaccesskey|Authorization:|X-Amz-Signature|delete_object|CURLOPT_CUSTOMREQUEST" "$TINY/amd/src" >/dev/null || \
   fail 'browser code contains secret/signature/server-delete material'
 
-grep -Fq "2026090902" "$LOCAL/version.php" || fail 'local version not bumped'
+localversion="$(sed -n 's/.*\$plugin->version = \([0-9][0-9]*\);.*/\1/p' "$LOCAL/version.php" | head -n1)"
+[[ "$localversion" =~ ^[0-9]+$ ]] || fail 'local version unreadable'
+(( localversion >= 2026090902 )) || fail 'local version older than lifecycle baseline'
 grep -Fq "2026090902" "$TINY/version.php" || fail 'tiny version not bumped'
-grep -Fq "upgrade_plugin_savepoint(true, 2026090902, 'local', 'digieramedia')" "$LOCAL/db/upgrade.php" || fail 'upgrade savepoint missing'
+grep -Fq "upgrade_plugin_savepoint(true, 2026090902, 'local', 'digieramedia')" "$LOCAL/db/upgrade.php" || fail 'lifecycle upgrade savepoint missing'
 ! grep -Eq '^namespace ' "$LOCAL/db/upgrade.php" || fail 'upgrade entrypoint must remain global'
 
 echo 'LIFECYCLE_SOURCE_CONTRACT=PASS'
