@@ -12,6 +12,7 @@ REQUIRED = [
     'public/local/digieramedia/classes/r2/config.php',
     'public/local/digieramedia/classes/r2/sigv4_client.php',
     'public/local/digieramedia/classes/service/file_policy.php',
+    'public/local/digieramedia/classes/service/recent_service.php',
     'public/local/digieramedia/classes/service/upload_session_service.php',
     'public/local/digieramedia/classes/service/upload_finalize_service.php',
     'public/local/digieramedia/classes/external/create_upload_session.php',
@@ -215,6 +216,34 @@ def test_reference_version_state_reopens_and_updates_existing_reference():
     assert 'Cập nhật reference' in ui
     assert 'getSelectedReference' in component_build
     assert 'local_digieramedia_update_reference_version' in ui_build
+
+def test_true_recent_and_permission_contract():
+    install = read('public/local/digieramedia/db/install.xml')
+    version = read('public/local/digieramedia/version.php')
+    recent = read('public/local/digieramedia/classes/service/recent_service.php')
+    create = read('public/local/digieramedia/classes/external/create_reference.php')
+    update = read('public/local/digieramedia/classes/external/update_reference_version.php')
+    search = read('public/local/digieramedia/classes/external/search_media.php')
+    lifecycle = read('public/local/digieramedia/classes/service/lifecycle_service.php')
+
+    assert 'local_digieramedia_recent' in install
+    assert 'NAME="user-media"' in install and 'FIELDS="userid, mediaid"' in install
+    assert 'NAME="user-lastused"' in install and 'FIELDS="userid, lastusedat"' in install
+    assert '2026091001' in version
+    assert 'class recent_service' in recent and 'function touch' in recent
+    assert 'recent_service' in create and 'CREATE_REFERENCE' in create
+    assert 'recent_service' in update and 'UPDATE_REFERENCE' in update
+    assert 'local_digieramedia_recent' in search
+    assert 'r.userid' in search and 'recentuserid' in search
+    assert 'r.lastusedat DESC' in search
+    assert "delete_records('local_digieramedia_recent'" in lifecycle
+
+    runtime_paths = list((ROOT / 'public/local/digieramedia/classes').rglob('*.php'))
+    runtime_paths += list((ROOT / 'public/lib/editor/tiny/plugins/digieramedia/amd/src').rglob('*.js'))
+    runtime = '\n'.join(path.read_text(encoding='utf-8') for path in runtime_paths)
+    forbidden = ['editingteacher', 'digiera_ktv_test', 'role_shortname', 'get_user_roles(']
+    for token in forbidden:
+        assert token not in runtime, f'Role-name authorization is forbidden in runtime code: {token}'
 
 def test_moodle_upgrade_entrypoint_is_global():
     upgrade = read('public/local/digieramedia/db/upgrade.php')
