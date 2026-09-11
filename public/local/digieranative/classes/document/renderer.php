@@ -47,7 +47,7 @@ final class renderer {
             'mathInline' => self::math($node, false),
             'mathBlock' => self::math($node, true),
             'hardBreak' => '<br>',
-            default => '', // Validator makes this unreachable.
+            default => '',
         };
     }
 
@@ -60,6 +60,9 @@ final class renderer {
                 'underline' => '<u>' . $html . '</u>',
                 'strike' => '<s>' . $html . '</s>',
                 'textColor' => '<span style="color:' . self::escape((string)$mark['attrs']['color']) . '">' . $html . '</span>',
+                'fontFamily' => '<span style="font-family:' . self::escape((string)$mark['attrs']['family']) . '">' . $html . '</span>',
+                'fontSize' => '<span style="font-size:' . (int)$mark['attrs']['px'] . 'px">' . $html . '</span>',
+                'highlight' => '<mark style="background-color:' . self::escape((string)$mark['attrs']['color']) . '">' . $html . '</mark>',
                 'link' => self::link_mark($html, $mark),
                 default => $html,
             };
@@ -122,11 +125,65 @@ final class renderer {
         if ($url === null) {
             return '<div class="dgn-image-missing" data-asset-key="' . self::escape($key) . '">Image unavailable</div>';
         }
+
         $alt = self::escape((string)($attrs['alt'] ?? ''));
-        $title = isset($attrs['title']) ? ' title="' . self::escape((string)$attrs['title']) . '"' : '';
-        $width = isset($attrs['width']) && (int)$attrs['width'] > 0 ? ' width="' . (int)$attrs['width'] . '"' : '';
-        $align = self::alignment_class($attrs['align'] ?? '');
-        return '<figure class="dgn-image' . $align . '"><img src="' . self::escape($url) . '" alt="' . $alt . '"' . $title . $width . ' loading="lazy"></figure>';
+        $title = isset($attrs['title']) && $attrs['title'] !== null
+            ? ' title="' . self::escape((string)$attrs['title']) . '"'
+            : '';
+        $legacywidth = isset($attrs['width']) && (int)$attrs['width'] > 0
+            ? ' width="' . (int)$attrs['width'] . '"'
+            : '';
+        $widthpercent = isset($attrs['widthPercent']) ? (int)$attrs['widthPercent'] : 100;
+        $align = in_array(($attrs['align'] ?? null), ['left', 'center', 'right'], true)
+            ? (string)$attrs['align']
+            : 'center';
+        $rotation = isset($attrs['rotation']) ? (int)$attrs['rotation'] : 0;
+        $cropx = isset($attrs['cropX']) ? (float)$attrs['cropX'] : 0.0;
+        $cropy = isset($attrs['cropY']) ? (float)$attrs['cropY'] : 0.0;
+        $cropw = isset($attrs['cropW']) ? (float)$attrs['cropW'] : 1.0;
+        $croph = isset($attrs['cropH']) ? (float)$attrs['cropH'] : 1.0;
+
+        $right = max(0.0, 1.0 - ($cropx + $cropw));
+        $bottom = max(0.0, 1.0 - ($cropy + $croph));
+        $figurestyle = 'width:' . $widthpercent . '%;';
+        if ($align === 'center') {
+            $figurestyle .= 'margin-left:auto;margin-right:auto;';
+        } else if ($align === 'right') {
+            $figurestyle .= 'margin-left:auto;margin-right:0;';
+        } else {
+            $figurestyle .= 'margin-left:0;margin-right:auto;';
+        }
+        $imgstyle = 'max-width:100%;height:auto;';
+        if ($cropx > 0 || $cropy > 0 || $right > 0 || $bottom > 0) {
+            $imgstyle .= 'clip-path:inset(' .
+                self::percent($cropy) . ' ' . self::percent($right) . ' ' .
+                self::percent($bottom) . ' ' . self::percent($cropx) . ');';
+        }
+        if ($rotation !== 0) {
+            $imgstyle .= 'transform:rotate(' . $rotation . 'deg);';
+        }
+
+        $metadata =
+            ' data-asset-key="' . self::escape($key) . '"' .
+            ' data-width-percent="' . $widthpercent . '"' .
+            ' data-align="' . self::escape($align) . '"' .
+            ' data-crop-x="' . self::escape((string)$cropx) . '"' .
+            ' data-crop-y="' . self::escape((string)$cropy) . '"' .
+            ' data-crop-w="' . self::escape((string)$cropw) . '"' .
+            ' data-crop-h="' . self::escape((string)$croph) . '"' .
+            ' data-rotation="' . $rotation . '"';
+
+        $caption = isset($attrs['caption']) && $attrs['caption'] !== ''
+            ? '<figcaption>' . self::escape((string)$attrs['caption']) . '</figcaption>'
+            : '';
+
+        return '<figure class="dgn-image dgn-align-' . self::escape($align) . '" style="' . self::escape($figurestyle) . '"' . $metadata . '>' .
+            '<img src="' . self::escape($url) . '" alt="' . $alt . '"' . $title . $legacywidth . ' style="' . self::escape($imgstyle) . '" loading="lazy">' .
+            $caption . '</figure>';
+    }
+
+    private static function percent(float $value): string {
+        return rtrim(rtrim(number_format($value * 100, 4, '.', ''), '0'), '.') . '%';
     }
 
     private static function instruction(array $node, string $mode, array $asseturls): string {
