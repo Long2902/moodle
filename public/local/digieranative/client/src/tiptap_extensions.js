@@ -1,5 +1,6 @@
-import {Mark, Node} from '@tiptap/core';
-import {markSpecs, nodeSpecs} from './schema_specs.js';
+import {Node} from '@tiptap/core';
+import {nodeSpecs} from './schema_specs.js';
+import {extendNodeSpecs} from './native_schema_extensions.js';
 
 const PROVIDED_BY_STARTER = new Set([
     'doc', 'paragraph', 'heading', 'orderedList', 'listItem',
@@ -37,29 +38,13 @@ function nodeExtension(name, spec) {
     });
 }
 
-function markExtension(name, spec) {
-    return Mark.create({
-        name,
-        addAttributes() {
-            return attributesFromSpec(spec);
-        },
-        parseHTML() {
-            return (spec.parseDOM || []).map((rule) => ({...rule}));
-        },
-        renderHTML({mark}) {
-            return spec.toDOM ? spec.toDOM(mark) : ['span', 0];
-        },
-    });
-}
-
 export function createDigieraExtensions() {
     const extensions = [];
-    for (const [name, spec] of Object.entries(nodeSpecs)) {
+    const extendedNodes = extendNodeSpecs(nodeSpecs);
+    for (const [name, spec] of Object.entries(extendedNodes)) {
         if (!PROVIDED_BY_STARTER.has(name) && name !== 'unorderedList') {
             extensions.push(nodeExtension(name, spec));
         }
     }
-    // StarterKit provides the standard marks; keep only DIGIERA-specific textColor.
-    extensions.push(markExtension('textColor', markSpecs.textColor));
     return extensions;
 }
