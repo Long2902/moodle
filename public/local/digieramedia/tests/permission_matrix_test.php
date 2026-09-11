@@ -198,9 +198,10 @@ final class permission_matrix_test extends \advanced_testcase {
         $ktv = $generator->create_user();
         $ordinary = $generator->create_user();
 
-        $teacherroleid = (int)$DB->get_field('role', 'id', ['shortname' => 'editingteacher'], MUST_EXIST);
         $managerroleid = (int)$DB->get_field('role', 'id', ['shortname' => 'manager'], MUST_EXIST);
-        role_assign($teacherroleid, $teacher->id, $coursecontext->id);
+        $generator->enrol_user($teacher->id, $course->id, 'editingteacher');
+        $generator->enrol_user($ktv->id, $course->id, 'student');
+        $generator->enrol_user($ordinary->id, $course->id, 'student');
         role_assign($managerroleid, $manager->id, $systemcontext->id);
 
         $ktvroleid = create_role('DIGIERA KTV test', 'digiera_ktv_test', 'RC1 permission matrix test role');
