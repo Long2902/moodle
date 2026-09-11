@@ -100,6 +100,8 @@ export function extendNativeImageSpec(baseSpec) {
             cropW: {default: null},
             cropH: {default: null},
             rotation: {default: null},
+            // Runtime-only preservation metadata. document_adapter strips this before Native JSON persistence.
+            _nativeLegacyAttrs: {default: null},
         },
         toDOM(node) {
             const attrs = {
@@ -140,6 +142,7 @@ export function extendNativeImageSpec(baseSpec) {
                     cropW: readFloat(dom, 'data-crop-w'),
                     cropH: readFloat(dom, 'data-crop-h'),
                     rotation: readInteger(dom, 'data-rotation'),
+                    _nativeLegacyAttrs: null,
                 };
             },
         }],
