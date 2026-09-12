@@ -3,10 +3,14 @@ import re
 
 root = Path(__file__).resolve().parents[3]
 bridge = (root / 'local' / 'worksheetlibrary' / 'amd' / 'src' / 'native_editor.js').read_text()
+build = (root / 'local' / 'worksheetlibrary' / 'amd' / 'build' / 'native_editor.min.js').read_text()
 pdf = (root / 'local' / 'worksheetlibrary' / 'pdf.php').read_text()
 print_route = root / 'local' / 'worksheetlibrary' / 'print.php'
 css = (root / 'local' / 'digieranative' / 'styles.css').read_text()
 editor = (root / 'local' / 'digieranative' / 'client' / 'src' / 'editor.js').read_text()
+
+# The production AMD artifact must match the source contract for this hotfix.
+assert bridge == build, 'Worksheet Native AMD build is stale versus src'
 
 # PDF must download without navigating the editor page away. This prevents
 # stale optimistic-revision state when the browser returns to the editor.
@@ -34,6 +38,7 @@ match = re.search(r'\.dgn-editor \.dgn-cambridge-toolbar\s*\{(?P<body>.*?)\}', c
 assert match and re.search(r'overflow-x\s*:\s*auto', match.group('body')), 'Cambridge toolbar must scroll horizontally'
 
 print('NATIVE_OUTPUT_BROWSER_CONTRACT=PASS')
+print('AMD_SRC_BUILD_PARITY=PASS')
 print('PDF_IN_PLACE_DOWNLOAD=PASS')
 print('PRINT_ISOLATED_WINDOW=PASS')
 print('TCPDF_UNICODE_FONT=PASS')
