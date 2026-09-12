@@ -429,32 +429,90 @@ const showStatus = (root, html) => {
     }
 };
 
-const showUploadProgress = (root, file, loaded, total, state = 'uploading') => {
+const renderUploadQueue = (root, uploadQueue) => {
     const queue = root.querySelector('[data-region="upload-queue"]');
     if (!queue) {
         return;
     }
-    const safeTotal = Math.max(1, Number(total || file.size || 1));
-    const percent = Math.min(100, Math.round((Number(loaded || 0) / safeTotal) * 100));
-    let label = `Đang tải lên ${percent}%`;
-    if (state === 'verifying') {
-        label = 'Đang xác minh trên R2…';
-    } else if (state === 'done') {
-        label = 'Đã tải lên';
+    if (!uploadQueue.length) {
+        queue.innerHTML = '';
+        return;
     }
-    queue.innerHTML = `<div class="border rounded p-2 mb-2 bg-white">
-        <div class="d-flex justify-content-between gap-2">
-            <strong class="text-truncate">${escapeHtml(file.name)}</strong>
-            <span class="small text-primary">${escapeHtml(label)}</span>
+
+    const allFinished = uploadQueue.every((item) => item.state === 'done' || item.state === 'error');
+    const doneCount = uploadQueue.filter((item) => item.state === 'done').length;
+
+    queue.innerHTML = `
+        <div class="tiny-digieramedia__queue-box border rounded p-2 mb-3 bg-light">
+            <div class="d-flex justify-content-between align-items-center mb-2 pb-1 border-bottom">
+                <span class="fw-semibold small">Tiến trình tải lên (${doneCount}/${uploadQueue.length})</span>
+                ${allFinished ? '<button type="button" class="btn btn-sm btn-link text-muted p-0 text-decoration-none" data-action="clear-upload-queue">Xóa danh sách</button>' : ''}
+            </div>
+            <div class="tiny-digieramedia__queue-items d-flex flex-column gap-2">
+                ${uploadQueue.map((item) => {
+                    const safeTotal = Math.max(1, item.total || item.file.size || 1);
+                    const percent = Math.min(100, Math.round(((item.loaded || 0) / safeTotal) * 100));
+                    let statusBadge = '<span class="badge bg-secondary">Chờ tải lên</span>';
+                    let barClass = 'bg-primary';
+                    if (item.state === 'uploading') {
+                        statusBadge = `<span class="badge bg-primary">Đang tải lên ${percent}%</span>`;
+                    } else if (item.state === 'verifying') {
+                        statusBadge = '<span class="badge bg-info text-dark">Đang xác minh trên R2…</span>';
+                        barClass = 'bg-info progress-bar-striped progress-bar-animated';
+                    } else if (item.state === 'done') {
+                        statusBadge = '<span class="badge bg-success">Đã tải lên</span>';
+                        barClass = 'bg-success';
+                    } else if (item.state === 'error') {
+                        statusBadge = '<span class="badge bg-danger">Lỗi</span>';
+                        barClass = 'bg-danger';
+                    }
+
+                    return `
+                        <div class="card p-2 bg-white shadow-sm border-0 tiny-digieramedia__queue-item" data-upload-id="${item.id}">
+                            <div class="d-flex justify-content-between align-items-center gap-2">
+                                <span class="text-truncate fw-medium small" style="max-width: 65%;" title="${escapeHtml(item.file.name)}">${escapeHtml(item.file.name)}</span>
+                                <div class="upload-badge-container">${statusBadge}</div>
+                            </div>
+                            <div class="progress mt-1" style="height: 6px;" role="progressbar" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100">
+                                <div class="progress-bar ${barClass}" style="width: ${percent}%;"></div>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center small text-muted mt-1 upload-meta">
+                                <span class="upload-progress-text">${formatBytes(item.loaded)} / ${formatBytes(safeTotal)}</span>
+                                ${item.state === 'error' ? `
+                                    <div class="d-flex align-items-center gap-1">
+                                        <span class="text-danger small">${escapeHtml(item.error || 'Lỗi')}</span>
+                                        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" data-action="retry-upload" data-upload-id="${item.id}" style="font-size: 11px;">Thử lại</button>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
         </div>
-        <div class="progress mt-2" role="progressbar" aria-valuenow="${percent}"
-            aria-valuemin="0" aria-valuemax="100">
-            <div class="progress-bar" style="width:${percent}%"></div>
-        </div>
-        <div class="small text-muted mt-1">
-            ${formatBytes(loaded)} / ${formatBytes(safeTotal)}
-        </div>
-    </div>`;
+    `;
+};
+
+const updateQueueProgressFast = (root, item) => {
+    const itemEl = root.querySelector(`[data-upload-id="${item.id}"]`);
+    if (!itemEl) {
+        return;
+    }
+    const safeTotal = Math.max(1, item.total || item.file.size || 1);
+    const percent = Math.min(100, Math.round(((item.loaded || 0) / safeTotal) * 100));
+    const bar = itemEl.querySelector('.progress-bar');
+    if (bar) {
+        bar.style.width = `${percent}%`;
+        bar.setAttribute('aria-valuenow', percent);
+    }
+    const text = itemEl.querySelector('.upload-progress-text');
+    if (text) {
+        text.textContent = `${formatBytes(item.loaded)} / ${formatBytes(safeTotal)}`;
+    }
+    const badge = itemEl.querySelector('.upload-badge-container');
+    if (badge && item.state === 'uploading') {
+        badge.innerHTML = `<span class="badge bg-primary">Đang tải lên ${percent}%</span>`;
+    }
 };
 
 const versionHistoryHtml = (data) => {
@@ -610,6 +668,7 @@ export const open = async(editor) => {
     let pinnedversionid = 0;
     let advancedRequest = 0;
     let purgeConfirming = false;
+    let uploadQueue = [];
 
     if (selectedReference?.referenceuuid) {
         try {
@@ -654,7 +713,9 @@ export const open = async(editor) => {
     };
     const syncTab = () => {
         root.querySelectorAll('[data-tab]').forEach((button) => {
-            button.classList.toggle('is-active', button.dataset.tab === tab);
+            const isActive = button.dataset.tab === tab;
+            button.classList.toggle('is-active', isActive);
+            button.setAttribute('aria-selected', isActive ? 'true' : 'false');
         });
     };
     const beginNewReference = () => {
@@ -730,42 +791,65 @@ export const open = async(editor) => {
         }
     };
 
-    const uploadFiles = async(files) => {
-        if (!config.canupload || uploading || !files?.length) {
+        const processUploadQueue = async() => {
+        if (uploading) {
             return;
         }
+        const pendingItems = uploadQueue.filter((i) => i.state === 'waiting');
+        if (!pendingItems.length) {
+            return;
+        }
+
         uploading = true;
         showStatus(root, '');
+        let lastSuccessfulMedia = null;
+        let successCount = 0;
+
         try {
-            const fileList = [...files];
-            for (let i = 0; i < fileList.length; i++) {
-                const file = fileList[i];
-                showUploadProgress(root, file, 0, file.size);
-                const media = await uploadFile(
-                    config,
-                    file,
-                    (loaded, total) => showUploadProgress(root, file, loaded, total)
+            for (const item of pendingItems) {
+                item.state = 'uploading';
+                item.loaded = 0;
+                renderUploadQueue(root, uploadQueue);
+
+                try {
+                    const media = await uploadFile(
+                        config,
+                        item.file,
+                        (loaded, total) => {
+                            item.loaded = loaded;
+                            item.total = total;
+                            updateQueueProgressFast(root, item);
+                        }
+                    );
+                    item.state = 'verifying';
+                    renderUploadQueue(root, uploadQueue);
+                    item.state = 'done';
+                    item.media = media;
+                    lastSuccessfulMedia = media;
+                    successCount++;
+                } catch (err) {
+                    item.state = 'error';
+                    item.error = err?.message || 'Upload thất bại.';
+                }
+                renderUploadQueue(root, uploadQueue);
+            }
+
+            if (lastSuccessfulMedia) {
+                selected = {...lastSuccessfulMedia, status: lastSuccessfulMedia.status || 'ACTIVE'};
+                beginNewReference();
+                tab = 'library';
+                syncTab();
+                await load('');
+                updatePreview(root, selected, lastData, editingReference);
+                syncSaveMode();
+                if (selected) {
+                    void loadAdvanced(selected);
+                }
+                showStatus(
+                    root,
+                    `<div class="alert alert-success py-2">Đã tải lên thành công ${successCount} học liệu. Sẵn sàng để chèn vào bài.</div>`
                 );
-                showUploadProgress(root, file, file.size, file.size, 'verifying');
-                selected = {...media, status: media.status || 'ACTIVE'};
-                showUploadProgress(root, file, file.size, file.size, 'done');
             }
-            beginNewReference();
-            tab = 'library';
-            syncTab();
-            await load('');
-            updatePreview(root, selected, lastData, editingReference);
-            syncSaveMode();
-            if (selected) {
-                void loadAdvanced(selected);
-            }
-            showStatus(
-                root,
-                '<div class="alert alert-success py-2">Upload R2 hoàn tất. Học liệu đã sẵn sàng để chèn.</div>'
-            );
-        } catch (error) {
-            const message = error?.message || 'Upload R2 thất bại.';
-            showStatus(root, `<div class="alert alert-danger py-2">${escapeHtml(message)}</div>`);
         } finally {
             uploading = false;
             if (uploadInput) {
@@ -774,21 +858,68 @@ export const open = async(editor) => {
         }
     };
 
+    const addFilesToUploadQueue = (files) => {
+        if (!config.canupload || !files?.length) {
+            return;
+        }
+        for (const file of files) {
+            uploadQueue.push({
+                id: `up_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                file,
+                state: 'waiting',
+                loaded: 0,
+                total: file.size,
+                error: null,
+                media: null,
+            });
+        }
+        renderUploadQueue(root, uploadQueue);
+        void processUploadQueue();
+    };
+
+    const uploadFiles = async(files) => {
+        if (!config.canupload || uploading || !files?.length) {
+            return;
+        }
+        showStatus(root, '');
+        addFilesToUploadQueue(files);
+    };
+
     const replaceSelectedFile = async(file) => {
         if (!file || !selected || selected.status !== 'ACTIVE' || uploading) {
             return;
         }
         uploading = true;
         showStatus(root, '');
+        const replaceBtn = root.querySelector('[data-action="replace-media"]');
+        if (replaceBtn) {
+            replaceBtn.disabled = true;
+        }
+        const replaceItem = {
+            id: `rep_${Date.now()}`,
+            file,
+            state: 'uploading',
+            loaded: 0,
+            total: file.size,
+            error: null,
+            media: null,
+        };
+        uploadQueue = [replaceItem];
+        renderUploadQueue(root, uploadQueue);
+
         try {
-            showUploadProgress(root, file, 0, file.size);
             const media = await uploadFile(
                 config,
                 file,
-                (loaded, total) => showUploadProgress(root, file, loaded, total),
+                (loaded, total) => {
+                    replaceItem.loaded = loaded;
+                    replaceItem.total = total;
+                    updateQueueProgressFast(root, replaceItem);
+                },
                 selected.uuid
             );
-            showUploadProgress(root, file, file.size, file.size, 'verifying');
+            replaceItem.state = 'verifying';
+            renderUploadQueue(root, uploadQueue);
             selected = {...media, status: 'ACTIVE'};
             tab = 'library';
             syncTab();
@@ -796,18 +927,24 @@ export const open = async(editor) => {
             updatePreview(root, selected, lastData, editingReference);
             syncSaveMode();
             await loadAdvanced(selected);
-            showUploadProgress(root, file, file.size, file.size, 'done');
+            replaceItem.state = 'done';
+            renderUploadQueue(root, uploadQueue);
             showStatus(
                 root,
                 '<div class="alert alert-success py-2">Đã thay thế file thành công (phiên bản mới đã được tạo).</div>'
             );
         } catch (error) {
-            const message = error?.message || 'Thay thế file thất bại.';
-            showStatus(root, `<div class="alert alert-danger py-2">${escapeHtml(message)}</div>`);
+            replaceItem.state = 'error';
+            replaceItem.error = error?.message || 'Thay thế file thất bại.';
+            renderUploadQueue(root, uploadQueue);
+            showStatus(root, `<div class="alert alert-danger py-2">${escapeHtml(replaceItem.error)}</div>`);
         } finally {
             uploading = false;
             if (replaceInput) {
                 replaceInput.value = '';
+            }
+            if (replaceBtn) {
+                replaceBtn.disabled = false;
             }
         }
     };
@@ -865,11 +1002,33 @@ export const open = async(editor) => {
             return;
         }
 
-        if (event.target.closest('[data-action="save-rename"]') && selected) {
+        const retryBtn = event.target.closest('[data-action="retry-upload"]');
+        if (retryBtn) {
+            const uploadId = retryBtn.dataset.uploadId;
+            const targetItem = uploadQueue.find((i) => i.id === uploadId);
+            if (targetItem) {
+                targetItem.state = 'waiting';
+                targetItem.error = null;
+                targetItem.loaded = 0;
+                renderUploadQueue(root, uploadQueue);
+                void processUploadQueue();
+            }
+            return;
+        }
+
+        if (event.target.closest('[data-action="clear-upload-queue"]')) {
+            uploadQueue = [];
+            renderUploadQueue(root, uploadQueue);
+            return;
+        }
+
+        const saveRenameBtn = event.target.closest('[data-action="save-rename"]');
+        if (saveRenameBtn && selected) {
             const input = root.querySelector('[data-region="rename-input"]');
             const newName = input ? input.value.trim() : '';
             if (newName && newName !== selected.name) {
                 try {
+                    saveRenameBtn.disabled = true;
                     showStatus(root, '<div class="alert alert-info py-2">Đang đổi tên học liệu…</div>');
                     const updated = await updateMedia(config, selected.uuid, newName);
                     selected.name = updated.name;
@@ -879,6 +1038,8 @@ export const open = async(editor) => {
                     showStatus(root, '<div class="alert alert-success py-2">Đã đổi tên học liệu thành công.</div>');
                 } catch (err) {
                     showStatus(root, `<div class="alert alert-danger py-2">${escapeHtml(err?.message || 'Đổi tên thất bại.')}</div>`);
+                } finally {
+                    saveRenameBtn.disabled = false;
                 }
             } else {
                 root.querySelector('[data-region="rename-container"]')?.classList.add('d-none');
@@ -893,8 +1054,10 @@ export const open = async(editor) => {
             return;
         }
 
-        if (event.target.closest('[data-action="trash-media"]') && selected) {
+        const trashBtn = event.target.closest('[data-action="trash-media"]');
+        if (trashBtn && selected) {
             try {
+                trashBtn.disabled = true;
                 const uuid = selected.uuid;
                 showStatus(root, '<div class="alert alert-info py-2">Đang đưa học liệu vào thùng rác…</div>');
                 await trashMedia(config, uuid, 'Moved to Trash from TinyMCE media library');
@@ -911,12 +1074,16 @@ export const open = async(editor) => {
                         error?.message || 'Không thể đưa vào thùng rác.'
                     )}</div>`
                 );
+            } finally {
+                trashBtn.disabled = false;
             }
             return;
         }
 
-        if (event.target.closest('[data-action="restore-media"]') && selected) {
+        const restoreBtn = event.target.closest('[data-action="restore-media"]');
+        if (restoreBtn && selected) {
             try {
+                restoreBtn.disabled = true;
                 const uuid = selected.uuid;
                 showStatus(root, '<div class="alert alert-info py-2">Đang khôi phục học liệu…</div>');
                 await restoreMedia(config, uuid);
@@ -930,6 +1097,8 @@ export const open = async(editor) => {
                         error?.message || 'Khôi phục thất bại.'
                     )}</div>`
                 );
+            } finally {
+                restoreBtn.disabled = false;
             }
             return;
         }
@@ -949,6 +1118,7 @@ export const open = async(editor) => {
         const confirmPurge = event.target.closest('[data-action="confirm-purge"]');
         if (confirmPurge && selected) {
             try {
+                confirmPurge.disabled = true;
                 const uuid = selected.uuid;
                 const force = Number(confirmPurge.dataset.liveCount || 0) > 0;
                 showStatus(root, '<div class="alert alert-danger py-2">Đang xóa vĩnh viễn các phiên bản trên R2…</div>');
@@ -965,6 +1135,7 @@ export const open = async(editor) => {
                 );
             } catch (error) {
                 purgeConfirming = false;
+                confirmPurge.disabled = false;
                 showStatus(
                     root,
                     `<div class="alert alert-danger py-2">${escapeHtml(
@@ -988,6 +1159,11 @@ export const open = async(editor) => {
         }
 
         if (event.target.closest('[data-action="library-only"]')) {
+            if (uploading) {
+                if (!confirm('Quá trình tải lên vẫn đang diễn ra. Bạn có chắc muốn đóng cửa sổ? Các tệp đã tải xong vẫn được lưu trong thư viện.')) {
+                    return;
+                }
+            }
             modal.hide();
         }
     });
@@ -1064,8 +1240,11 @@ export const open = async(editor) => {
             return;
         }
         const save = root.querySelector('[data-action="save"]');
+        let originalSaveText = '';
         if (save) {
+            originalSaveText = save.innerHTML;
             save.disabled = true;
+            save.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> ${editingReference ? 'Đang cập nhật…' : 'Đang chèn…'}`;
         }
         try {
             const pin = versionmode === 'PINNED_VERSION' ? pinnedversionid : 0;
@@ -1104,9 +1283,10 @@ export const open = async(editor) => {
             modal.hide();
             editor.focus();
         } catch (error) {
-            showStatus(root, '<div class="alert alert-danger">Không thể lưu cấu hình reference học liệu.</div>');
+            showStatus(root, '<div class="alert alert-danger py-2">Không thể lưu cấu hình reference học liệu.</div>');
             if (save) {
                 save.disabled = false;
+                save.innerHTML = originalSaveText;
             }
         }
     });
