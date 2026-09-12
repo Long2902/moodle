@@ -61,4 +61,5 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo "FOCUSED_HEAD=$GITHUB_SHA"
           vendor/bin/phpunit public/local/digieramedia/tests/backup_manifest_test.php
