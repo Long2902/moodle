@@ -230,7 +230,7 @@ export function CambridgeToolbar({
     const currentFont = state.textStyle.fontFamily || '';
     const currentSize = String(state.textStyle.fontSize || '').replace(/px$/, '');
 
-    const controls = [
+    const primaryControls = [
         button({id: 'save', title: 'Lưu ngay', icon: Save, disabled: disabled || typeof saveNow !== 'function', onClick: () => saveNow?.()}),
         button({id: 'print', title: 'In', icon: Printer, disabled: disabled || typeof print !== 'function', onClick: () => print?.()}),
         button({id: 'download-pdf', title: 'Tải PDF', icon: FileDown, disabled: disabled || typeof downloadPdf !== 'function', onClick: () => downloadPdf?.()}),
@@ -305,6 +305,9 @@ export function CambridgeToolbar({
         separator('s4'),
         button({id: 'link', title: 'Thêm/sửa liên kết', icon: Link2, active: state.link, disabled, onClick: () => editLink(editor)}),
         button({id: 'unlink', title: 'Xóa liên kết', icon: Unlink, disabled: disabled || !state.link, onClick: () => editor.chain().focus().extendMarkRange('link').unsetLink().run()}),
+    ];
+
+    const secondaryControls = [
         button({id: 'insert-picture', title: 'Chèn ảnh', icon: ImagePlus, disabled, onClick: choosePicture}),
         button({id: 'insert-table', title: 'Chèn bảng 3×3', icon: Table2, disabled, onClick: () => editor.chain().focus().insertTable({rows: 3, cols: 3, withHeaderRow: false}).run()}),
         button({id: 'add-row', title: 'Thêm hàng', label: '+Row', disabled, onClick: () => editor.chain().focus().addRowAfter().run()}),
@@ -353,7 +356,18 @@ export function CambridgeToolbar({
             role: 'toolbar',
             'aria-label': 'DIGIERA document toolbar',
             'data-dgn-cambridge-toolbar': '1',
-        }, controls),
+        }, [
+            h('div', {
+                key: 'primary-row',
+                className: 'dgn-cambridge-row',
+                'data-dgn-toolbar-row': 'primary',
+            }, primaryControls),
+            h('div', {
+                key: 'secondary-row',
+                className: 'dgn-cambridge-row',
+                'data-dgn-toolbar-row': 'secondary',
+            }, secondaryControls),
+        ]),
         h('input', {
             key: 'image-input', ref: imageInputRef, type: 'file', accept: 'image/*', hidden: true,
             onChange: event => {
