@@ -10,7 +10,9 @@ describe('Cambridge toolbar migration contract', () => {
         expect(editor).not.toMatch(/createRibbon/);
         expect(editor).toMatch(/OfficialEditor|@tiptap\/react/);
         expect(official).toMatch(/CambridgeToolbar/);
-        expect(official).not.toMatch(/from ['"].*toolbar\.js/);
+        // Retired toolbar module is ./toolbar.js. Do not reject the active
+        // ./cambridge_toolbar.js merely because its filename also ends in toolbar.js.
+        expect(official).not.toMatch(/from\s+['"]\.\/toolbar\.js['"]/);
     });
 
     it('does not expose known dead placeholder controls', () => {
