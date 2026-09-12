@@ -50,6 +50,90 @@ function safeAssetUrl(value) {
     }
 }
 
+function numericData(figure, name, fallback) {
+    const value = Number.parseFloat(figure.getAttribute(name) || '');
+    return Number.isFinite(value) ? value : fallback;
+}
+
+function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+}
+
+function cropInset(value) {
+    return `${Math.max(0, value) * 100}%`;
+}
+
+function applyManagedImagePreview(document, figure, url) {
+    const widthPercent = clamp(numericData(figure, 'data-width-percent', 100), 10, 100);
+    const align = ['left', 'center', 'right'].includes(figure.getAttribute('data-align'))
+        ? figure.getAttribute('data-align')
+        : 'center';
+    const rotation = [0, 90, 180, 270].includes(numericData(figure, 'data-rotation', 0))
+        ? numericData(figure, 'data-rotation', 0)
+        : 0;
+    const cropX = clamp(numericData(figure, 'data-crop-x', 0), 0, 1);
+    const cropY = clamp(numericData(figure, 'data-crop-y', 0), 0, 1);
+    const cropW = clamp(numericData(figure, 'data-crop-w', 1), 0, 1);
+    const cropH = clamp(numericData(figure, 'data-crop-h', 1), 0, 1);
+    const cropRight = Math.max(0, 1 - (cropX + cropW));
+    const cropBottom = Math.max(0, 1 - (cropY + cropH));
+
+    figure.style.width = `${widthPercent}%`;
+    figure.style.maxWidth = '100%';
+    figure.style.boxSizing = 'border-box';
+    figure.style.backgroundImage = '';
+    figure.style.marginLeft = align === 'right' || align === 'center' ? 'auto' : '0px';
+    figure.style.marginRight = align === 'left' || align === 'center' ? 'auto' : '0px';
+
+    let image = figure.querySelector('img.dgn-image__preview');
+    if (!image) {
+        image = document.createElement('img');
+        image.className = 'dgn-image__preview';
+        const placeholder = figure.querySelector('.dgn-image__placeholder');
+        if (placeholder) {
+            placeholder.before(image);
+        } else {
+            figure.prepend(image);
+        }
+    }
+    image.setAttribute('src', url);
+    image.setAttribute('alt', figure.getAttribute('data-alt') || '');
+    const title = figure.getAttribute('data-title');
+    if (title) {
+        image.setAttribute('title', title);
+    } else {
+        image.removeAttribute('title');
+    }
+    image.style.display = 'block';
+    image.style.width = '100%';
+    image.style.maxWidth = '100%';
+    image.style.height = 'auto';
+    image.style.objectFit = 'contain';
+    image.style.transformOrigin = 'center center';
+    image.style.transform = rotation ? `rotate(${rotation}deg)` : '';
+    image.style.clipPath = cropX > 0 || cropY > 0 || cropRight > 0 || cropBottom > 0
+        ? `inset(${cropInset(cropY)} ${cropInset(cropRight)} ${cropInset(cropBottom)} ${cropInset(cropX)})`
+        : '';
+
+    const placeholder = figure.querySelector('.dgn-image__placeholder');
+    if (placeholder) {
+        placeholder.style.display = 'none';
+    }
+
+    const caption = figure.getAttribute('data-caption') || '';
+    let figcaption = figure.querySelector('figcaption.dgn-image__caption');
+    if (caption) {
+        if (!figcaption) {
+            figcaption = document.createElement('figcaption');
+            figcaption.className = 'dgn-image__caption';
+            figure.append(figcaption);
+        }
+        figcaption.textContent = caption;
+    } else if (figcaption) {
+        figcaption.remove();
+    }
+}
+
 export function createEditorState(documentJson) {
     if (documentJson === null || typeof documentJson !== 'object' || Array.isArray(documentJson)) {
         throw new TypeError('Native document must be an object');
@@ -122,14 +206,15 @@ export function mount(config = {}) {
             if (!url) {
                 figure.removeAttribute('data-asset-url');
                 figure.style.removeProperty('background-image');
+                figure.querySelector('img.dgn-image__preview')?.remove();
+                const placeholder = figure.querySelector('.dgn-image__placeholder');
+                if (placeholder) {
+                    placeholder.style.display = '';
+                }
                 return;
             }
             figure.setAttribute('data-asset-url', url);
-            figure.style.backgroundImage = `url("${url.replaceAll('"', '%22')}")`;
-            const placeholder = figure.querySelector('.dgn-image__placeholder');
-            if (placeholder) {
-                placeholder.style.visibility = 'hidden';
-            }
+            applyManagedImagePreview(document, figure, url);
         });
     };
     const notifyUpdate = () => {
