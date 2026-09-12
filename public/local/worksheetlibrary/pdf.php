@@ -88,7 +88,7 @@ $pdf->setPrintHeader(false);
 $pdf->setPrintFooter(false);
 $pdf->SetMargins($margin, $margin, $margin);
 $pdf->SetAutoPageBreak(true, $margin);
-$pdf->SetFont('dejavusans', '', 10.5, '', true);
+$pdf->SetFont('freesans', '', 10.5, '', true);
 $pdf->AddPage();
 $pdf->writeHTML($html, true, false, true, false, '');
 
