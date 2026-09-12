@@ -3,6 +3,14 @@
 defined('MOODLE_INTERNAL') || die();
 
 $functions = [
+    'local_digieramedia_update_media' => [
+        'classname' => 'local_digieramedia\\external\\update_media',
+        'methodname' => 'execute',
+        'description' => 'Update media name or visibility metadata',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => 'local/digieramedia:view',
+    ],
     'local_digieramedia_search_media' => [
         'classname' => 'local_digieramedia\\external\\search_media',
         'methodname' => 'execute',

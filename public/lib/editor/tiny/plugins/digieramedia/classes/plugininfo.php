@@ -40,6 +40,19 @@ final class plugininfo extends plugin implements plugin_with_buttons, plugin_wit
             'contextid' => (int)$context->id,
             'courseid' => $courseid,
             'canupload' => has_capability('local/digieramedia:upload', $context),
+            'canmanagevisibility' => has_capability('local/digieramedia:managevisibility', $context),
+            'canmanageversions' => has_capability('local/digieramedia:manageversions', $context),
+            'canreplace' => has_capability('local/digieramedia:replace', $context),
+            'canviewusage' => has_capability('local/digieramedia:viewusage', $context),
+            'cantrash' => has_capability('local/digieramedia:trashown', $context)
+                || has_capability('local/digieramedia:trash', $context),
+            'canrestore' => has_capability('local/digieramedia:restore', $context),
+            'canpurge' => has_capability('local/digieramedia:purge', $context),
+            'canedit' => has_capability('local/digieramedia:editown', $context)
+                || has_capability('local/digieramedia:editall', $context)
+                || has_capability('local/digieramedia:manage', $context),
+            'canoverridepath' => has_capability('local/digieramedia:overridepath', $context)
+                || has_capability('local/digieramedia:manage', $context),
         ];
     }
 }

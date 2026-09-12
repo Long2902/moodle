@@ -27,6 +27,8 @@ final class get_media_versions extends external_api {
 
         $canreplace = has_capability('local/digieramedia:replace', $context);
         $canmanageversions = has_capability('local/digieramedia:manageversions', $context);
+        $canoverridepath = has_capability('local/digieramedia:overridepath', $context)
+            || has_capability('local/digieramedia:manage', $context);
         $canlifecycle = has_capability('local/digieramedia:viewusage', $context)
             || has_capability('local/digieramedia:restore', $context)
             || has_capability('local/digieramedia:purge', $context);
@@ -61,6 +63,10 @@ final class get_media_versions extends external_api {
 
         $versions = [];
         foreach ($records as $version) {
+            $storagepath = '';
+            if ($canoverridepath && !empty($version->objectkey)) {
+                $storagepath = (string)$version->objectkey;
+            }
             $versions[] = [
                 'id' => (int)$version->id,
                 'versionno' => (int)$version->versionno,
@@ -70,6 +76,7 @@ final class get_media_versions extends external_api {
                 'status' => (string)$version->status,
                 'timecreated' => (int)$version->timecreated,
                 'iscurrent' => (int)$version->id === (int)$media->currentversionid,
+                'storagepath' => $storagepath,
             ];
         }
 
@@ -100,6 +107,7 @@ final class get_media_versions extends external_api {
                 'status' => new external_value(PARAM_ALPHA, 'Version status'),
                 'timecreated' => new external_value(PARAM_INT, 'Creation time'),
                 'iscurrent' => new external_value(PARAM_BOOL, 'Current version flag'),
+                'storagepath' => new external_value(PARAM_RAW_TRIMMED, 'Storage path for admin/ktv', VALUE_OPTIONAL),
             ])),
         ]);
     }

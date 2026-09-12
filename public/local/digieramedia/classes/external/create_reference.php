@@ -16,6 +16,8 @@ final class create_reference extends external_api {
             'displayprofile' => new external_value(PARAM_ALPHANUMEXT, 'Display profile', VALUE_DEFAULT, 'embedded'),
             'versionmode' => new external_value(PARAM_ALPHANUMEXT, 'FOLLOW_CURRENT or PINNED_VERSION', VALUE_DEFAULT, 'FOLLOW_CURRENT'),
             'pinnedversionid' => new external_value(PARAM_INT, 'Version id when pinned', VALUE_DEFAULT, 0),
+            'alttext' => new external_value(PARAM_TEXT, 'Alternative text for accessibility', VALUE_DEFAULT, null),
+            'caption' => new external_value(PARAM_TEXT, 'Caption for media display', VALUE_DEFAULT, null),
         ]);
     }
 
@@ -24,13 +26,15 @@ final class create_reference extends external_api {
         string $mediauuid,
         string $displayprofile = 'embedded',
         string $versionmode = 'FOLLOW_CURRENT',
-        int $pinnedversionid = 0
+        int $pinnedversionid = 0,
+        ?string $alttext = null,
+        ?string $caption = null
     ): array {
         global $DB, $USER;
 
         $params = self::validate_parameters(
             self::execute_parameters(),
-            compact('contextid', 'mediauuid', 'displayprofile', 'versionmode', 'pinnedversionid')
+            compact('contextid', 'mediauuid', 'displayprofile', 'versionmode', 'pinnedversionid', 'alttext', 'caption')
         );
         $context = context::instance_by_id($params['contextid'], MUST_EXIST);
         self::validate_context($context);
@@ -81,6 +85,9 @@ final class create_reference extends external_api {
 
         $uuid = self::uuidv4();
         $now = time();
+        $cleanAlt = $params['alttext'] !== null ? trim((string)$params['alttext']) : null;
+        $cleanCap = $params['caption'] !== null ? trim((string)$params['caption']) : null;
+
         $record = (object)[
             'uuid' => $uuid,
             'mediaid' => (int)$media->id,
@@ -96,8 +103,8 @@ final class create_reference extends external_api {
             'pinnedversionid' => $pinnedversionid,
             'status' => 'DRAFT',
             'createdby' => (int)$USER->id,
-            'alttext' => null,
-            'caption' => null,
+            'alttext' => $cleanAlt,
+            'caption' => $cleanCap,
             'optionsjson' => null,
             'timecreated' => $now,
             'timemodified' => $now,
@@ -118,6 +125,8 @@ final class create_reference extends external_api {
             'marker' => '[[digiera-ref:' . $uuid . ']]',
             'versionmode' => $versionmode,
             'pinnedversionid' => $pinnedversionid,
+            'alttext' => $cleanAlt,
+            'caption' => $cleanCap,
         ];
     }
 
@@ -130,6 +139,8 @@ final class create_reference extends external_api {
             'marker' => new external_value(PARAM_RAW, 'Stored marker'),
             'versionmode' => new external_value(PARAM_ALPHANUMEXT, 'Version mode'),
             'pinnedversionid' => new external_value(PARAM_INT, 'Pinned version id or zero'),
+            'alttext' => new external_value(PARAM_TEXT, 'Alternative text', VALUE_OPTIONAL),
+            'caption' => new external_value(PARAM_TEXT, 'Caption', VALUE_OPTIONAL),
         ]);
     }
 

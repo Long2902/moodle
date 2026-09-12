@@ -15,6 +15,9 @@ final class update_reference_version extends external_api {
             'referenceuuid' => new external_value(PARAM_ALPHANUMEXT, 'DIGIERA reference UUID'),
             'versionmode' => new external_value(PARAM_ALPHANUMEXT, 'FOLLOW_CURRENT or PINNED_VERSION'),
             'pinnedversionid' => new external_value(PARAM_INT, 'Version id when pinned', VALUE_DEFAULT, 0),
+            'alttext' => new external_value(PARAM_TEXT, 'Updated alt text', VALUE_DEFAULT, null),
+            'caption' => new external_value(PARAM_TEXT, 'Updated caption', VALUE_DEFAULT, null),
+            'newmediauuid' => new external_value(PARAM_ALPHANUMEXT, 'Re-point reference to a different media item', VALUE_DEFAULT, ''),
         ]);
     }
 
@@ -22,13 +25,16 @@ final class update_reference_version extends external_api {
         int $contextid,
         string $referenceuuid,
         string $versionmode,
-        int $pinnedversionid = 0
+        int $pinnedversionid = 0,
+        ?string $alttext = null,
+        ?string $caption = null,
+        string $newmediauuid = ''
     ): array {
         global $DB, $USER;
 
         $params = self::validate_parameters(
             self::execute_parameters(),
-            compact('contextid', 'referenceuuid', 'versionmode', 'pinnedversionid')
+            compact('contextid', 'referenceuuid', 'versionmode', 'pinnedversionid', 'alttext', 'caption', 'newmediauuid')
         );
 
         $context = context::instance_by_id($params['contextid'], MUST_EXIST);
@@ -54,10 +60,19 @@ final class update_reference_version extends external_api {
             throw new \invalid_parameter_exception('Cannot update a trashed DIGIERA reference.');
         }
 
-        $media = $DB->get_record('local_digieramedia_media', [
-            'id' => (int)$reference->mediaid,
-            'status' => 'ACTIVE',
-        ], '*', MUST_EXIST);
+        $media = null;
+        if (!empty($params['newmediauuid'])) {
+            $media = $DB->get_record('local_digieramedia_media', [
+                'uuid' => $params['newmediauuid'],
+                'status' => 'ACTIVE',
+            ], '*', MUST_EXIST);
+            $reference->mediaid = (int)$media->id;
+        } else {
+            $media = $DB->get_record('local_digieramedia_media', [
+                'id' => (int)$reference->mediaid,
+                'status' => 'ACTIVE',
+            ], '*', MUST_EXIST);
+        }
 
         $versionmode = strtoupper((string)$params['versionmode']);
         if (!in_array($versionmode, ['FOLLOW_CURRENT', 'PINNED_VERSION'], true)) {
@@ -79,8 +94,15 @@ final class update_reference_version extends external_api {
 
         $reference->versionmode = $versionmode;
         $reference->pinnedversionid = $pinnedversionid;
+        if ($params['alttext'] !== null) {
+            $reference->alttext = trim((string)$params['alttext']);
+        }
+        if ($params['caption'] !== null) {
+            $reference->caption = trim((string)$params['caption']);
+        }
         $reference->timemodified = time();
         $DB->update_record('local_digieramedia_reference', $reference);
+
         (new \local_digieramedia\service\recent_service())->touch(
             (int)$USER->id,
             (int)$media->id,
@@ -95,6 +117,8 @@ final class update_reference_version extends external_api {
             'mediatype' => (string)$media->mediatype,
             'versionmode' => $versionmode,
             'pinnedversionid' => $pinnedversionid,
+            'alttext' => $reference->alttext,
+            'caption' => $reference->caption,
         ];
     }
 
@@ -106,6 +130,8 @@ final class update_reference_version extends external_api {
             'mediatype' => new external_value(PARAM_ALPHANUMEXT, 'Media type'),
             'versionmode' => new external_value(PARAM_ALPHANUMEXT, 'Saved reference version mode'),
             'pinnedversionid' => new external_value(PARAM_INT, 'Saved pinned version id or zero'),
+            'alttext' => new external_value(PARAM_TEXT, 'Saved alt text', VALUE_OPTIONAL),
+            'caption' => new external_value(PARAM_TEXT, 'Saved caption', VALUE_OPTIONAL),
         ]);
     }
 }

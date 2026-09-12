@@ -43,6 +43,9 @@ final class resolve_references extends external_api {
             $sql = "SELECT r.uuid AS referenceuuid,
                            r.versionmode,
                            r.pinnedversionid,
+                           r.alttext,
+                           r.caption,
+                           r.displayprofile,
                            m.uuid AS mediauuid,
                            m.name,
                            m.mediatype,
@@ -76,6 +79,9 @@ final class resolve_references extends external_api {
                 'visibility' => (string)$record->visibility,
                 'modified' => (int)$record->modified,
                 'size' => (int)$record->size,
+                'alttext' => $record->alttext !== null ? (string)$record->alttext : '',
+                'caption' => $record->caption !== null ? (string)$record->caption : '',
+                'displayprofile' => (string)($record->displayprofile ?? 'embedded'),
             ];
         }
 
@@ -95,6 +101,9 @@ final class resolve_references extends external_api {
                 'visibility' => new external_value(PARAM_ALPHANUMEXT, 'Media visibility'),
                 'modified' => new external_value(PARAM_INT, 'Media modified time'),
                 'size' => new external_value(PARAM_INT, 'Current version bytes'),
+                'alttext' => new external_value(PARAM_TEXT, 'Alternative text', VALUE_OPTIONAL),
+                'caption' => new external_value(PARAM_TEXT, 'Caption', VALUE_OPTIONAL),
+                'displayprofile' => new external_value(PARAM_ALPHANUMEXT, 'Display profile', VALUE_OPTIONAL),
             ])
         );
     }

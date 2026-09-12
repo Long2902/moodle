@@ -53,6 +53,8 @@ final class search_media extends external_api {
         }
 
         $canviewall = has_capability('local/digieramedia:viewall', $context);
+        $canoverridepath = has_capability('local/digieramedia:overridepath', $context)
+            || has_capability('local/digieramedia:manage', $context);
         $where = [];
         $sqlparams = [];
 
@@ -112,7 +114,7 @@ final class search_media extends external_api {
         );
 
         $select = "SELECT m.id, m.uuid, m.name, m.mediatype, m.mimetype, m.visibility, m.status,
-                          m.owneruserid, m.timemodified, v.filesize, v.displayfilename, v.status AS versionstatus";
+                          m.owneruserid, m.timemodified, v.filesize, v.displayfilename, v.objectkey, v.status AS versionstatus";
         $records = $DB->get_records_sql(
             $select . $fromsql . ' WHERE ' . $wheresql . $order,
             $sqlparams,
@@ -122,6 +124,10 @@ final class search_media extends external_api {
 
         $items = [];
         foreach ($records as $record) {
+            $storagepath = '';
+            if ($canoverridepath && !empty($record->objectkey)) {
+                $storagepath = (string)$record->objectkey;
+            }
             $items[] = [
                 'uuid' => (string)$record->uuid,
                 'name' => (string)$record->name,
@@ -132,6 +138,7 @@ final class search_media extends external_api {
                 'visibility' => (string)$record->visibility,
                 'status' => (string)$record->status,
                 'ready' => (($record->versionstatus ?? '') === 'READY'),
+                'storagepath' => $storagepath,
             ];
         }
 
@@ -148,6 +155,10 @@ final class search_media extends external_api {
                 || has_capability('local/digieramedia:trash', $context),
             'canrestore' => has_capability('local/digieramedia:restore', $context),
             'canpurge' => has_capability('local/digieramedia:purge', $context),
+            'canmanagevisibility' => has_capability('local/digieramedia:managevisibility', $context),
+            'canedit' => has_capability('local/digieramedia:editown', $context)
+                || has_capability('local/digieramedia:editall', $context)
+                || has_capability('local/digieramedia:manage', $context),
         ];
     }
 
@@ -163,6 +174,7 @@ final class search_media extends external_api {
                 'visibility' => new external_value(PARAM_ALPHA, 'Visibility'),
                 'status' => new external_value(PARAM_ALPHA, 'Media status'),
                 'ready' => new external_value(PARAM_BOOL, 'Current version is ready'),
+                'storagepath' => new external_value(PARAM_RAW_TRIMMED, 'Physical storage path for admin/ktv', VALUE_OPTIONAL),
             ])),
             'page' => new external_value(PARAM_INT, 'Zero-based page'),
             'pagesize' => new external_value(PARAM_INT, 'Page size'),
@@ -174,6 +186,8 @@ final class search_media extends external_api {
             'cantrash' => new external_value(PARAM_BOOL, 'Trash capability summary'),
             'canrestore' => new external_value(PARAM_BOOL, 'Restore capability summary'),
             'canpurge' => new external_value(PARAM_BOOL, 'Permanent-purge capability summary'),
+            'canmanagevisibility' => new external_value(PARAM_BOOL, 'Manage visibility capability'),
+            'canedit' => new external_value(PARAM_BOOL, 'Edit media metadata capability'),
         ]);
     }
 }
