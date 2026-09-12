@@ -223,6 +223,19 @@ export function mount(config = {}) {
         }));
     });
 
+    // Keep the compact Cambridge ribbon on one horizontal row. The base stylesheet
+    // supplies overflow-x:auto; these runtime layout properties also protect
+    // installations where an older cached stylesheet is still present briefly.
+    const cambridgeToolbar = toolbarHost.querySelector('.dgn-cambridge-toolbar');
+    if (cambridgeToolbar) {
+        cambridgeToolbar.style.display = 'flex';
+        cambridgeToolbar.style.flexWrap = 'nowrap';
+        cambridgeToolbar.style.alignItems = 'center';
+        cambridgeToolbar.style.gap = '.18rem';
+        cambridgeToolbar.style.minHeight = '2.75rem';
+        cambridgeToolbar.style.padding = '.35rem .45rem';
+    }
+
     const originalDestroy = editor.destroy.bind(editor);
     let destroyed = false;
     editor.destroy = () => {
