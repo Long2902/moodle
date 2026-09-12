@@ -8,10 +8,10 @@ defined('MOODLE_INTERNAL') || die();
  */
 class backup_local_digieramedia_plugin extends backup_local_plugin {
     /**
-     * Attach DIGIERA Media references to the module node in module.xml.
+     * Attach marker-derived DIGIERA Media manifests to the module node.
      *
-     * Only portable logical identities are exported. R2 bucket/object keys and
-     * database-local numeric ids intentionally never enter the Moodle backup.
+     * Persisted marker content is authoritative. Database-local numeric ids,
+     * R2 bucket/object keys and credentials never enter the Moodle backup.
      *
      * @return backup_plugin_element
      */
@@ -23,26 +23,37 @@ class backup_local_digieramedia_plugin extends backup_local_plugin {
             'source_reference_uuid',
             'media_uuid',
             'displayprofile',
-            'versionmode',
-            'pinned_version_no',
+            'source_versionmode',
+            'effective_version_no',
+            'alttext',
+            'caption',
+            'optionsjson',
+            'adapter',
+            'source_entity_id',
+            'fieldname',
+            'occurrence',
         ]);
 
         $plugin->add_child($wrapper);
         $wrapper->add_child($references);
         $references->add_child($reference);
 
-        $sql = "SELECT r.uuid AS source_reference_uuid,
-                       m.uuid AS media_uuid,
-                       r.displayprofile,
-                       r.versionmode,
-                       CASE WHEN r.versionmode = 'PINNED_VERSION' THEN pv.versionno ELSE NULL END AS pinned_version_no
-                  FROM {local_digieramedia_reference} r
-                  JOIN {local_digieramedia_media} m ON m.id = r.mediaid
-             LEFT JOIN {local_digieramedia_version} pv ON pv.id = r.pinnedversionid
-                 WHERE r.contextid = :contextid
-                   AND r.status = 'ACTIVE'
-              ORDER BY r.id";
-        $reference->set_source_sql($sql, ['contextid' => backup::VAR_CONTEXTID]);
+        $registry = new \local_digieramedia\backup\content_adapter_registry();
+        $adapter = $registry->for_module((string)$this->task->get_modulename());
+        $rows = [];
+        if ($adapter) {
+            $collector = new \local_digieramedia\backup\reference_collector(
+                new \local_digieramedia\repository\reference_repository(),
+                new \local_digieramedia\repository\media_repository(),
+                new \local_digieramedia\repository\version_repository()
+            );
+            foreach ($adapter->source_records((int)$this->task->get_activityid()) as $record) {
+                foreach ($collector->collect_content($record) as $manifest) {
+                    $rows[] = $manifest;
+                }
+            }
+        }
+        $reference->set_source_array($rows);
 
         return $plugin;
     }
