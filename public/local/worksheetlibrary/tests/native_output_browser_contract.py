@@ -8,6 +8,7 @@ pdf = (root / 'local' / 'worksheetlibrary' / 'pdf.php').read_text()
 print_route = root / 'local' / 'worksheetlibrary' / 'print.php'
 css = (root / 'local' / 'digieranative' / 'styles.css').read_text()
 editor = (root / 'local' / 'digieranative' / 'client' / 'src' / 'editor.js').read_text()
+toolbar = (root / 'local' / 'digieranative' / 'client' / 'src' / 'ui' / 'cambridge_toolbar.js').read_text()
 
 # The production AMD artifact must match the source contract for this hotfix.
 assert bridge == build, 'Worksheet Native AMD build is stale versus src'
@@ -31,15 +32,23 @@ for token in ['renderer::render_json', 'native_asset_service::asset_urls', '@pag
 assert "SetFont('freesans'" in pdf, 'PDF must use bundled Unicode FreeSans'
 assert "SetFont('dejavusans'" not in pdf, 'PDF must not use unavailable DejaVuSans'
 
-# Compact Cambridge ribbon stays on one row and scrolls horizontally when needed.
-assert "cambridgeToolbar.style.display = 'flex'" in editor, 'Cambridge toolbar must be a flex row'
-assert "cambridgeToolbar.style.flexWrap = 'nowrap'" in editor, 'Cambridge toolbar must not wrap'
+# User-approved layout: exactly two explicit Cambridge ribbon rows. Keep output
+# logic untouched; only the toolbar presentation changes.
+assert "cambridgeToolbar.style.flexWrap = 'nowrap'" not in editor, 'Editor runtime must not force the whole ribbon into one row'
+assert toolbar.count("data-dgn-toolbar-row") == 2, 'Cambridge toolbar must expose exactly two explicit rows'
+assert "'data-dgn-toolbar-row': 'primary'" in toolbar, 'Primary ribbon row missing'
+assert "'data-dgn-toolbar-row': 'secondary'" in toolbar, 'Secondary ribbon row missing'
+match = re.search(r'\.dgn-editor \.dgn-cambridge-row\s*\{(?P<body>.*?)\}', css, re.S)
+assert match, 'Cambridge row CSS block missing'
+rowbody = match.group('body')
+assert re.search(r'display\s*:\s*flex', rowbody), 'Each Cambridge row must use flex layout'
+assert re.search(r'flex-wrap\s*:\s*nowrap', rowbody), 'Each Cambridge row must remain a single line'
 match = re.search(r'\.dgn-editor \.dgn-cambridge-toolbar\s*\{(?P<body>.*?)\}', css, re.S)
-assert match and re.search(r'overflow-x\s*:\s*auto', match.group('body')), 'Cambridge toolbar must scroll horizontally'
+assert match and re.search(r'overflow-x\s*:\s*auto', match.group('body')), 'Two-row ribbon must retain horizontal overflow protection'
 
 print('NATIVE_OUTPUT_BROWSER_CONTRACT=PASS')
 print('AMD_SRC_BUILD_PARITY=PASS')
 print('PDF_IN_PLACE_DOWNLOAD=PASS')
 print('PRINT_ISOLATED_WINDOW=PASS')
 print('TCPDF_UNICODE_FONT=PASS')
-print('CAMBRIDGE_SINGLE_ROW=PASS')
+print('CAMBRIDGE_TWO_ROW=PASS')
