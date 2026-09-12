@@ -14,6 +14,7 @@ use local_digieramedia\restore\reference_remapper;
  * @covers \local_digieramedia\restore\reference_remapper
  */
 final class shared_restore_manifest_test extends \advanced_testcase {
+    private static int $fixtureidx = 0;
     private function fixture(string $mediastatus = 'ACTIVE', string $versionstatus = 'READY'): array {
         $this->resetAfterTest();
         $course = $this->getDataGenerator()->create_course();
@@ -23,7 +24,7 @@ final class shared_restore_manifest_test extends \advanced_testcase {
 
         global $DB, $USER;
         $mediaid = (int)$DB->insert_record('local_digieramedia_media', (object)[
-            'uuid' => 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            'uuid' => str_pad(dechex(++self::$fixtureidx), 8, 'a', STR_PAD_LEFT) . '-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
             'name' => 'Manifest source',
             'description' => '',
             'mediatype' => 'pdf',
@@ -61,7 +62,7 @@ final class shared_restore_manifest_test extends \advanced_testcase {
 
         $manifest = [
             'source_reference_uuid' => '11111111-1111-4111-8111-111111111111',
-            'media_uuid' => 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            'media_uuid' => str_pad(dechex(self::$fixtureidx), 8, 'a', STR_PAD_LEFT) . '-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
             'displayprofile' => 'pdf_full',
             'source_versionmode' => 'FOLLOW_CURRENT',
             'effective_version_no' => 3,
