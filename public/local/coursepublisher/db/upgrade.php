@@ -458,5 +458,29 @@ function xmldb_local_coursepublisher_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026082902, 'local', 'coursepublisher');
     }
 
+    
+    // DIGIERA Media 1.2.0: add digieramode column to job and batch tables.
+    if ($oldversion < 2026091101) {
+        $dbman = $DB->get_manager();
+
+        // Add digieramode to local_cp_job.
+        $table = new xmldb_table('local_cp_job');
+        $field = new xmldb_field('digieramode', XMLDB_TYPE_CHAR, '32', null,
+            XMLDB_NOTNULL, null, 'shared_follow', 'mode');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Add digieramode to local_cp_batch.
+        $table = new xmldb_table('local_cp_batch');
+        $field = new xmldb_field('digieramode', XMLDB_TYPE_CHAR, '32', null,
+            XMLDB_NOTNULL, null, 'shared_follow', 'publishmode');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_plugin_savepoint(true, 2026091101, 'local', 'coursepublisher');
+    }
+
     return true;
 }

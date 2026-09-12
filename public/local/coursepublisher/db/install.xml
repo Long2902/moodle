@@ -200,6 +200,7 @@
         <FIELD NAME="attemptno" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="1" />
         <FIELD NAME="mutationstate" TYPE="char" LENGTH="16" NOTNULL="true" DEFAULT="unknown" />
         <FIELD NAME="mode" TYPE="char" LENGTH="16" NOTNULL="true" DEFAULT="foundation" />
+          <FIELD NAME="digieramode" TYPE="char" LENGTH="32" NOTNULL="true" DEFAULT="shared_follow" />
         <FIELD NAME="status" TYPE="char" LENGTH="32" NOTNULL="true" DEFAULT="draft" />
         <FIELD NAME="attempts" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
         <FIELD NAME="idempotencykey" TYPE="char" LENGTH="64" NOTNULL="true" />
@@ -286,6 +287,7 @@
         <FIELD NAME="sourcecourseid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
         <FIELD NAME="sourcefingerprint" TYPE="char" LENGTH="64" NOTNULL="true" />
         <FIELD NAME="publishmode" TYPE="char" LENGTH="32" NOTNULL="true" />
+        <FIELD NAME="digieramode" TYPE="char" LENGTH="32" NOTNULL="true" DEFAULT="shared_follow" />
         <FIELD NAME="placementmode" TYPE="char" LENGTH="16" NOTNULL="true" DEFAULT="auto" />
         <FIELD NAME="placementjson" TYPE="text" NOTNULL="false" />
         <FIELD NAME="resolverversion" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="1" />
