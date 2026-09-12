@@ -18,5 +18,8 @@ for name, endpoint in [('teacher', teacher_endpoint), ('student', student_endpoi
     header_pos = endpoint.find("header('Content-Type: application/json")
     try_pos = endpoint.find('try {')
     assert header_pos != -1 and try_pos != -1 and header_pos < try_pos, f'{name} endpoint must declare JSON before request validation'
+    for token in ['required_param(', 'require_sesskey(']:
+        pos = endpoint.find(token)
+        assert pos == -1 or pos > try_pos, f'{name} endpoint must catch {token} failures and return JSON'
 
 print('NATIVE_IMAGE_UPLOAD_ERROR_CONTRACT=PASS')
