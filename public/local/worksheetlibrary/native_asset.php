@@ -1,13 +1,13 @@
 <?php
 require('../../config.php');
 
-require_login();
-require_sesskey();
-\local_worksheetlibrary\service\access_service::require_author();
-
 header('Content-Type: application/json; charset=utf-8');
 
 try {
+    require_login();
+    require_sesskey();
+    \local_worksheetlibrary\service\access_service::require_author();
+
     $versionid = required_param('versionid', PARAM_INT);
     $version = $DB->get_record('wslib_version', ['id' => $versionid], '*', MUST_EXIST);
     $item = $DB->get_record('wslib_item', ['id' => $version->itemid], '*', MUST_EXIST);
