@@ -1,5 +1,11 @@
 import {Schema} from 'prosemirror-model';
 import {markSpecs, nodeSpecs} from './schema_specs.js';
+import {
+    NATIVE_FONT_FAMILIES,
+    NATIVE_FONT_SIZES,
+    extendMarkSpecs,
+    extendNodeSpecs,
+} from './native_schema_extensions.js';
 
 const linkMarkSpec = {
     attrs: {
@@ -29,9 +35,12 @@ const linkMarkSpec = {
     }],
 };
 
+const nativeNodeSpecs = extendNodeSpecs(nodeSpecs);
+const nativeMarkSpecs = extendMarkSpecs(markSpecs);
+
 export const schema = new Schema({
-    nodes: nodeSpecs,
-    marks: {...markSpecs, link: linkMarkSpec},
+    nodes: nativeNodeSpecs,
+    marks: {...nativeMarkSpecs, link: linkMarkSpec},
 });
 
 const SAFE_ID = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -43,6 +52,12 @@ const ALIGNMENTS = new Set([
     'center',
     'right',
     'justify',
+]);
+
+const IMAGE_ALIGNMENTS = new Set([
+    'left',
+    'center',
+    'right',
 ]);
 
 const ANSWER_NODES = new Set([
@@ -68,6 +83,7 @@ const BOUNDED_TEXT_ATTRS = new Set([
     'label',
     'alt',
     'title',
+    'caption',
     'variant',
     'optionId',
     'selectionMode',
@@ -80,11 +96,7 @@ function utf8ByteLength(value) {
 
 function assertSafeId(attrs, key) {
     const value = attrs[key];
-
-    if (
-        typeof value !== 'string' ||
-        !SAFE_ID.test(value)
-    ) {
+    if (typeof value !== 'string' || !SAFE_ID.test(value)) {
         throw new TypeError(`${key} is invalid`);
     }
 }
@@ -106,57 +118,37 @@ function isSafeLinkUrl(value) {
 
 function assertAllowedNodeAttrs(type, attrs) {
     const nodetype = schema.nodes[type];
-
     if (!nodetype) {
         throw new TypeError(`Unknown Native node type: ${type}`);
     }
-
-    if (
-        attrs === null ||
-        typeof attrs !== 'object' ||
-        Array.isArray(attrs)
-    ) {
+    if (attrs === null || typeof attrs !== 'object' || Array.isArray(attrs)) {
         throw new TypeError('Node attrs must be an object');
     }
-
-    const allowed = new Set(
-        Object.keys(nodetype.spec.attrs ?? {}),
-    );
-
+    const allowed = new Set(Object.keys(nodetype.spec.attrs ?? {}));
     for (const key of Object.keys(attrs)) {
         if (!allowed.has(key)) {
-            throw new TypeError(
-                `Unexpected key in ${type} attrs: ${key}`,
-            );
+            throw new TypeError(`Unexpected key in ${type} attrs: ${key}`);
         }
+    }
+}
+
+function validateOptionalUnitInterval(value, label, {positive = false} = {}) {
+    if (value === undefined || value === null) {
+        return;
+    }
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1 || (positive && value <= 0)) {
+        throw new TypeError(`${label} must be within the allowed range`);
     }
 }
 
 export function validateNodeAttrs(type, attrs = {}) {
     assertAllowedNodeAttrs(type, attrs);
 
-    if (
-        attrs.level !== undefined &&
-        attrs.level !== null &&
-        (
-            !Number.isInteger(attrs.level) ||
-            attrs.level < 1 ||
-            attrs.level > 6
-        )
-    ) {
-        throw new TypeError(
-            'Heading level must be between 1 and 6',
-        );
+    if (attrs.level !== undefined && attrs.level !== null && (!Number.isInteger(attrs.level) || attrs.level < 1 || attrs.level > 6)) {
+        throw new TypeError('Heading level must be between 1 and 6');
     }
 
-    if (
-        attrs.align !== undefined &&
-        attrs.align !== null &&
-        (
-            typeof attrs.align !== 'string' ||
-            !ALIGNMENTS.has(attrs.align)
-        )
-    ) {
+    if (attrs.align !== undefined && attrs.align !== null && (typeof attrs.align !== 'string' || !ALIGNMENTS.has(attrs.align))) {
         throw new TypeError('Invalid alignment');
     }
 
@@ -173,72 +165,51 @@ export function validateNodeAttrs(type, attrs = {}) {
     }
 
     if (type === 'image') {
-        if (
-            typeof attrs.assetKey !== 'string' ||
-            !SAFE_ASSET.test(attrs.assetKey)
-        ) {
-            throw new TypeError(
-                'Image assetKey is invalid',
-            );
+        if (typeof attrs.assetKey !== 'string' || !SAFE_ASSET.test(attrs.assetKey)) {
+            throw new TypeError('Image assetKey is invalid');
+        }
+        if (attrs.align !== undefined && attrs.align !== null && !IMAGE_ALIGNMENTS.has(attrs.align)) {
+            throw new TypeError('Invalid image alignment');
+        }
+        if (attrs.widthPercent !== undefined && attrs.widthPercent !== null &&
+                (!Number.isInteger(attrs.widthPercent) || attrs.widthPercent < 10 || attrs.widthPercent > 100)) {
+            throw new TypeError('Image widthPercent must be between 10 and 100');
+        }
+        validateOptionalUnitInterval(attrs.cropX, 'cropX');
+        validateOptionalUnitInterval(attrs.cropY, 'cropY');
+        validateOptionalUnitInterval(attrs.cropW, 'cropW', {positive: true});
+        validateOptionalUnitInterval(attrs.cropH, 'cropH', {positive: true});
+        if (attrs.cropX !== undefined && attrs.cropX !== null && attrs.cropW !== undefined && attrs.cropW !== null && attrs.cropX + attrs.cropW > 1) {
+            throw new TypeError('cropX + cropW must be <= 1');
+        }
+        if (attrs.cropY !== undefined && attrs.cropY !== null && attrs.cropH !== undefined && attrs.cropH !== null && attrs.cropY + attrs.cropH > 1) {
+            throw new TypeError('cropY + cropH must be <= 1');
+        }
+        if (attrs.rotation !== undefined && attrs.rotation !== null && ![0, 90, 180, 270].includes(attrs.rotation)) {
+            throw new TypeError('Invalid image rotation');
         }
     }
 
-    if (
-        attrs.points !== undefined &&
-        attrs.points !== null &&
-        (
-            typeof attrs.points !== 'number' ||
-            !Number.isFinite(attrs.points)
-        )
-    ) {
-        throw new TypeError(
-            'Question points must be numeric',
-        );
+    if (attrs.points !== undefined && attrs.points !== null && (typeof attrs.points !== 'number' || !Number.isFinite(attrs.points))) {
+        throw new TypeError('Question points must be numeric');
     }
 
     for (const key of BOUNDED_INTEGER_ATTRS) {
         const value = attrs[key];
-
-        if (
-            value !== undefined &&
-            value !== null &&
-            (
-                !Number.isInteger(value) ||
-                value < 0 ||
-                value > 10000
-            )
-        ) {
-            throw new TypeError(
-                `${key} must be a bounded integer`,
-            );
+        if (value !== undefined && value !== null && (!Number.isInteger(value) || value < 0 || value > 10000)) {
+            throw new TypeError(`${key} must be a bounded integer`);
         }
     }
 
     for (const key of BOUNDED_TEXT_ATTRS) {
         const value = attrs[key];
-
-        if (
-            value !== undefined &&
-            value !== null &&
-            (
-                typeof value !== 'string' ||
-                utf8ByteLength(value) > 2048
-            )
-        ) {
-            throw new TypeError(
-                `${key} must be bounded text`,
-            );
+        if (value !== undefined && value !== null && (typeof value !== 'string' || utf8ByteLength(value) > 2048)) {
+            throw new TypeError(`${key} must be bounded text`);
         }
     }
 
-    if (
-        attrs.checked !== undefined &&
-        attrs.checked !== null &&
-        typeof attrs.checked !== 'boolean'
-    ) {
-        throw new TypeError(
-            'checked must be boolean',
-        );
+    if (attrs.checked !== undefined && attrs.checked !== null && typeof attrs.checked !== 'boolean') {
+        throw new TypeError('checked must be boolean');
     }
 
     return true;
@@ -246,32 +217,32 @@ export function validateNodeAttrs(type, attrs = {}) {
 
 export function validateMarkAttrs(type, attrs = {}) {
     const marktype = schema.marks[type];
-
     if (!marktype) {
         throw new TypeError('Unknown Native mark');
     }
-
-    if (
-        attrs === null ||
-        typeof attrs !== 'object' ||
-        Array.isArray(attrs)
-    ) {
+    if (attrs === null || typeof attrs !== 'object' || Array.isArray(attrs)) {
         throw new TypeError('Mark attrs must be an object');
     }
 
-    if (type === 'textColor') {
+    if (type === 'textColor' || type === 'highlight') {
         const keys = Object.keys(attrs);
-
-        if (
-            keys.some((key) => key !== 'color') ||
-            typeof attrs.color !== 'string' ||
-            !SAFE_COLOR.test(attrs.color)
-        ) {
-            throw new TypeError(
-                'Invalid text color',
-            );
+        if (keys.some((key) => key !== 'color') || typeof attrs.color !== 'string' || !SAFE_COLOR.test(attrs.color)) {
+            throw new TypeError(type === 'highlight' ? 'Invalid highlight color' : 'Invalid text color');
         }
+        return true;
+    }
 
+    if (type === 'fontFamily') {
+        if (Object.keys(attrs).some((key) => key !== 'family') || !NATIVE_FONT_FAMILIES.includes(attrs.family)) {
+            throw new TypeError('Invalid font family');
+        }
+        return true;
+    }
+
+    if (type === 'fontSize') {
+        if (Object.keys(attrs).some((key) => key !== 'px') || !Number.isInteger(attrs.px) || !NATIVE_FONT_SIZES.includes(attrs.px)) {
+            throw new TypeError('Invalid font size');
+        }
         return true;
     }
 
@@ -293,10 +264,7 @@ export function validateMarkAttrs(type, attrs = {}) {
     }
 
     if (Object.keys(attrs).length !== 0) {
-        throw new TypeError(
-            'This mark does not accept attrs',
-        );
+        throw new TypeError('This mark does not accept attrs');
     }
-
     return true;
 }

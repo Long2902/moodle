@@ -26,6 +26,11 @@ try {
     if ($version->state !== 'draft') {
         throw new moodle_exception('Only draft Native versions accept images');
     }
+
+    $action = optional_param('action', 'create', PARAM_ALPHA);
+    if (!in_array($action, ['create', 'replace'], true)) {
+        throw new moodle_exception('Unsupported image action');
+    }
     if (empty($_FILES['image'])) {
         throw new moodle_exception('Image upload is required');
     }
@@ -47,11 +52,21 @@ try {
         throw new moodle_exception('Unsupported image type');
     }
 
-    $result = \local_worksheetlibrary\service\native_asset_service::store_upload(
-        $versionid,
-        $upload,
-        (int)$USER->id
-    );
+    if ($action === 'replace') {
+        $assetkey = required_param('assetkey', PARAM_ALPHANUMEXT);
+        $result = \local_worksheetlibrary\service\native_asset_service::replace_upload(
+            $versionid,
+            $assetkey,
+            $upload,
+            (int)$USER->id
+        );
+    } else {
+        $result = \local_worksheetlibrary\service\native_asset_service::store_upload(
+            $versionid,
+            $upload,
+            (int)$USER->id
+        );
+    }
 
     echo json_encode(['ok' => true] + $result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {

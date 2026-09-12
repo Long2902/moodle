@@ -13,7 +13,10 @@ final class schema {
     ];
 
     public const INLINE_NODES = ['text', 'hardBreak', 'mathInline'];
-    public const MARKS = ['bold', 'italic', 'underline', 'strike', 'textColor', 'link'];
+    public const MARKS = [
+        'bold', 'italic', 'underline', 'strike',
+        'textColor', 'fontFamily', 'fontSize', 'highlight', 'link',
+    ];
 
     public const ANSWER_NODES = ['shortAnswer', 'longAnswer', 'checkbox', 'multipleChoice', 'answerTable'];
 

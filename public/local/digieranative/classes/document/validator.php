@@ -2,7 +2,7 @@
 namespace local_digieranative\document;
 
 final class validator {
-    private const DEFAULT_MAX_BYTES = 2097152; // 2 MiB canonical JSON safety limit.
+    private const DEFAULT_MAX_BYTES = 2097152;
     private const DEFAULT_MAX_NODES = 20000;
     private const MAX_TEXT_BYTES = 1048576;
     private const MAX_ATTR_TEXT = 2048;
@@ -10,18 +10,19 @@ final class validator {
     private const SAFE_ASSET = '/\A[A-Za-z0-9_-]{1,128}\z/';
     private const SAFE_COLOR = '/\A#[0-9A-Fa-f]{6}\z/';
     private const ALIGNMENTS = ['left', 'center', 'right', 'justify'];
+    private const IMAGE_ALIGNMENTS = ['left', 'center', 'right'];
+    private const FONT_FAMILIES = ['Arial', 'Calibri', 'Georgia', 'Times New Roman', 'Verdana'];
+    private const FONT_SIZES = [10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36];
 
     public static function validate_json(string $json): array {
         if ($json === '' || strlen($json) > self::max_bytes()) {
             throw new \invalid_parameter_exception('Native document size is invalid');
         }
-
         try {
             $document = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
         } catch (\JsonException $e) {
             throw new \invalid_parameter_exception('Invalid Native JSON');
         }
-
         if (!is_array($document) || ($document['type'] ?? null) !== 'worksheet') {
             throw new \invalid_parameter_exception('Native document root must be worksheet');
         }
@@ -31,12 +32,10 @@ final class validator {
         if (!array_key_exists('content', $document) || !is_array($document['content'])) {
             throw new \invalid_parameter_exception('Native document content must be an array');
         }
-
         self::assert_allowed_keys($document, ['type', 'version', 'content', 'meta'], 'document');
         if (isset($document['meta']) && !is_array($document['meta'])) {
             throw new \invalid_parameter_exception('Native document meta must be an object');
         }
-
         $nodecount = 0;
         foreach ($document['content'] as $node) {
             self::validate_node($node, 1, $nodecount);
@@ -55,13 +54,11 @@ final class validator {
         if ($nodecount > self::max_nodes()) {
             throw new \invalid_parameter_exception('Native document contains too many nodes');
         }
-
         $type = $node['type'];
         if (!in_array($type, schema::node_types(), true)) {
             throw new \invalid_parameter_exception('Unknown Native node type: ' . $type);
         }
         self::assert_allowed_keys($node, ['type', 'attrs', 'content', 'marks', 'text'], 'node');
-
         if ($type === 'text') {
             if (!array_key_exists('text', $node) || !is_string($node['text']) || strlen($node['text']) > self::MAX_TEXT_BYTES) {
                 throw new \invalid_parameter_exception('Text node has invalid text');
@@ -72,7 +69,6 @@ final class validator {
         } else if (array_key_exists('text', $node)) {
             throw new \invalid_parameter_exception('Only text nodes can contain text');
         }
-
         if (isset($node['attrs'])) {
             if (!is_array($node['attrs'])) {
                 throw new \invalid_parameter_exception('Node attrs must be an object');
@@ -81,7 +77,6 @@ final class validator {
         } else {
             self::validate_attrs($type, []);
         }
-
         if (isset($node['marks'])) {
             if ($type !== 'text' || !is_array($node['marks'])) {
                 throw new \invalid_parameter_exception('Marks are only allowed on text nodes');
@@ -90,7 +85,6 @@ final class validator {
                 self::validate_mark($mark);
             }
         }
-
         if (array_key_exists('content', $node)) {
             if (!is_array($node['content'])) {
                 throw new \invalid_parameter_exception('Node content must be an array');
@@ -111,7 +105,7 @@ final class validator {
             'checkbox' => ['questionId', 'optionId', 'checked', 'label'],
             'multipleChoice' => ['questionId', 'selectionMode'],
             'answerTable' => ['questionId', 'rows', 'cols'],
-            'image' => ['assetKey', 'alt', 'title', 'width', 'align'],
+            'image' => ['assetKey', 'alt', 'title', 'caption', 'width', 'widthPercent', 'align', 'cropX', 'cropY', 'cropW', 'cropH', 'rotation'],
             'orderedList' => ['order'],
             'teacherOnlyNote' => ['label'],
             'rubricAnchor' => ['id'],
@@ -137,9 +131,7 @@ final class validator {
             self::require_safe_id($attrs, 'id');
         }
         if ($type === 'image') {
-            if (!isset($attrs['assetKey']) || !is_string($attrs['assetKey']) || !preg_match(self::SAFE_ASSET, $attrs['assetKey'])) {
-                throw new \invalid_parameter_exception('Image assetKey is invalid');
-            }
+            self::validate_image_attrs($attrs);
         }
         if (isset($attrs['points']) && (!is_int($attrs['points']) && !is_float($attrs['points']))) {
             throw new \invalid_parameter_exception('Question points must be numeric');
@@ -149,7 +141,7 @@ final class validator {
                 throw new \invalid_parameter_exception($key . ' must be a bounded integer');
             }
         }
-        foreach (['placeholder', 'label', 'alt', 'title', 'variant', 'optionId', 'selectionMode', 'source'] as $key) {
+        foreach (['placeholder', 'label', 'alt', 'title', 'caption', 'variant', 'optionId', 'selectionMode', 'source'] as $key) {
             if (isset($attrs[$key]) && (!is_string($attrs[$key]) || strlen($attrs[$key]) > self::MAX_ATTR_TEXT)) {
                 throw new \invalid_parameter_exception($key . ' must be bounded text');
             }
@@ -159,18 +151,66 @@ final class validator {
         }
     }
 
+    private static function validate_image_attrs(array $attrs): void {
+        if (!isset($attrs['assetKey']) || !is_string($attrs['assetKey']) || !preg_match(self::SAFE_ASSET, $attrs['assetKey'])) {
+            throw new \invalid_parameter_exception('Image assetKey is invalid');
+        }
+        if (isset($attrs['align']) && !in_array($attrs['align'], self::IMAGE_ALIGNMENTS, true)) {
+            throw new \invalid_parameter_exception('Invalid image alignment');
+        }
+        if (isset($attrs['widthPercent']) && (!is_int($attrs['widthPercent']) || $attrs['widthPercent'] < 10 || $attrs['widthPercent'] > 100)) {
+            throw new \invalid_parameter_exception('Image widthPercent must be between 10 and 100');
+        }
+        foreach (['cropX', 'cropY', 'cropW', 'cropH'] as $key) {
+            if (!isset($attrs[$key])) {
+                continue;
+            }
+            if ((!is_int($attrs[$key]) && !is_float($attrs[$key])) || $attrs[$key] < 0 || $attrs[$key] > 1) {
+                throw new \invalid_parameter_exception($key . ' must be between 0 and 1');
+            }
+        }
+        if (isset($attrs['cropW']) && (float)$attrs['cropW'] <= 0) {
+            throw new \invalid_parameter_exception('cropW must be positive');
+        }
+        if (isset($attrs['cropH']) && (float)$attrs['cropH'] <= 0) {
+            throw new \invalid_parameter_exception('cropH must be positive');
+        }
+        if (isset($attrs['cropX'], $attrs['cropW']) && (float)$attrs['cropX'] + (float)$attrs['cropW'] > 1.0000001) {
+            throw new \invalid_parameter_exception('cropX + cropW must be <= 1');
+        }
+        if (isset($attrs['cropY'], $attrs['cropH']) && (float)$attrs['cropY'] + (float)$attrs['cropH'] > 1.0000001) {
+            throw new \invalid_parameter_exception('cropY + cropH must be <= 1');
+        }
+        if (isset($attrs['rotation']) && (!is_int($attrs['rotation']) || !in_array($attrs['rotation'], [0, 90, 180, 270], true))) {
+            throw new \invalid_parameter_exception('Invalid image rotation');
+        }
+    }
+
     private static function validate_mark(mixed $mark): void {
         if (!is_array($mark) || !isset($mark['type']) || !is_string($mark['type']) || !in_array($mark['type'], schema::MARKS, true)) {
             throw new \invalid_parameter_exception('Unknown Native mark');
         }
         self::assert_allowed_keys($mark, ['type', 'attrs'], 'mark');
-        if ($mark['type'] === 'textColor') {
+        $type = $mark['type'];
+        if ($type === 'textColor' || $type === 'highlight') {
             $attrs = $mark['attrs'] ?? null;
             if (!is_array($attrs) || !isset($attrs['color']) || !is_string($attrs['color']) || !preg_match(self::SAFE_COLOR, $attrs['color'])) {
-                throw new \invalid_parameter_exception('Invalid text color');
+                throw new \invalid_parameter_exception($type === 'highlight' ? 'Invalid highlight color' : 'Invalid text color');
             }
-            self::assert_allowed_keys($attrs, ['color'], 'textColor attrs');
-        } else if ($mark['type'] === 'link') {
+            self::assert_allowed_keys($attrs, ['color'], $type . ' attrs');
+        } else if ($type === 'fontFamily') {
+            $attrs = $mark['attrs'] ?? null;
+            if (!is_array($attrs) || !isset($attrs['family']) || !is_string($attrs['family']) || !in_array($attrs['family'], self::FONT_FAMILIES, true)) {
+                throw new \invalid_parameter_exception('Invalid font family');
+            }
+            self::assert_allowed_keys($attrs, ['family'], 'fontFamily attrs');
+        } else if ($type === 'fontSize') {
+            $attrs = $mark['attrs'] ?? null;
+            if (!is_array($attrs) || !isset($attrs['px']) || !is_int($attrs['px']) || !in_array($attrs['px'], self::FONT_SIZES, true)) {
+                throw new \invalid_parameter_exception('Invalid font size');
+            }
+            self::assert_allowed_keys($attrs, ['px'], 'fontSize attrs');
+        } else if ($type === 'link') {
             $attrs = $mark['attrs'] ?? null;
             if (!is_array($attrs) || !isset($attrs['href']) || !is_string($attrs['href']) || !self::is_safe_link_url($attrs['href'])) {
                 throw new \invalid_parameter_exception('Invalid link href');

@@ -3,12 +3,13 @@ import {describe,expect,it} from 'vitest';
 import {mount} from '../src/index.js';
 
 describe('DIGIERA Native Tiptap mount API',()=>{
- it('mounts Native worksheet JSON and exposes Tiptap editor state',()=>{
+ it('mounts Native worksheet JSON and exposes the Cambridge editor shell',()=>{
   const element=document.createElement('div');document.body.append(element);
   const editor=mount({element,documentJson:{type:'worksheet',version:1,content:[{type:'paragraph',content:[{type:'text',text:'Frozen mount contract'}]}]}});
   expect(editor.getJSON().type).toBe('doc');
   expect(editor.state.doc.textContent).toBe('Frozen mount contract');
-  expect(element.querySelector('[data-dgn-official-toolbar="1"]')).not.toBeNull();
+  expect(element.querySelector('[data-dgn-cambridge-toolbar="1"]')).not.toBeNull();
+  expect(element.querySelector('[data-dgn-official-toolbar="1"]')).toBeNull();
   expect(editor.view.dom.classList.contains('dgn-canvas')).toBe(true);
   editor.destroy();element.remove();
  });

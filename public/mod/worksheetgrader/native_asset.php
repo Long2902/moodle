@@ -21,6 +21,7 @@ try {
     if (($session->worksheetkind ?? '') !== 'native') {
         throw new moodle_exception('Worksheet is not Native');
     }
+
     $team = $DB->get_record('wsg_team', ['id' => $attempt->teamid, 'sessionid' => $session->id], '*', MUST_EXIST);
     $members = \mod_worksheetgrader\service\team_manager::get_member_ids((int)$team->id);
     if (!in_array((int)$USER->id, array_map('intval', $members), true)) {
@@ -39,6 +40,11 @@ try {
             !\mod_worksheetgrader\service\session_manager::is_open($session) || !(bool)$session->membershiplocked ||
             !\mod_worksheetgrader\service\attempt_manager::can_edit($activity, $team, (int)$USER->id)) {
         throw new moodle_exception('attemptnoteditable', 'mod_worksheetgrader');
+    }
+
+    $action = optional_param('action', 'create', PARAM_ALPHA);
+    if (!in_array($action, ['create', 'replace'], true)) {
+        throw new moodle_exception('Unsupported image action');
     }
     if (empty($_FILES['image'])) {
         throw new moodle_exception('Image upload is required');
@@ -61,12 +67,24 @@ try {
         throw new moodle_exception('Unsupported image type');
     }
 
-    $result = \mod_worksheetgrader\service\native_asset_service::store_upload(
-        $context,
-        $attemptid,
-        $upload,
-        (int)$USER->id
-    );
+    if ($action === 'replace') {
+        $assetkey = required_param('assetkey', PARAM_ALPHANUMEXT);
+        $result = \mod_worksheetgrader\service\native_asset_service::replace_upload(
+            $context,
+            $attemptid,
+            $assetkey,
+            $upload,
+            (int)$USER->id
+        );
+    } else {
+        $result = \mod_worksheetgrader\service\native_asset_service::store_upload(
+            $context,
+            $attemptid,
+            $upload,
+            (int)$USER->id
+        );
+    }
+
     echo json_encode(['ok' => true] + $result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
     http_response_code(400);
