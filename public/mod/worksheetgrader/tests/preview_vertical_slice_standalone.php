@@ -17,7 +17,7 @@ namespace {
     }
     final class fake_file_storage {
         public function delete_area_files(...$args): void {}
-        public function create_file_from_storedfile(...$args) { throw new \RuntimeException('Native snapshot must not clone a file'); }
+        public function create_file_from_storedfile(...$args) { throw new \RuntimeException('Native snapshot must not clone a file through legacy storage'); }
     }
     function get_file_storage(): fake_file_storage { static $fs; return $fs ??= new fake_file_storage(); }
     function worksheetgrader_update_completion(...$args): void {}
@@ -49,6 +49,30 @@ namespace mod_worksheetgrader\service {
     final class team_manager {
         public static array $members = [100];
         public static function get_member_ids(int $teamid): array { return self::$members; }
+    }
+
+    // The real Moodle runtime autoloads native_asset_service and clones/resolves
+    // managed files through File API. This standalone slice intentionally has no
+    // real file storage, so model the service boundary while asserting that the
+    // Native workflow actually invokes it.
+    final class native_asset_service {
+        public static int $clonecalls = 0;
+        public static int $asseturlcalls = 0;
+
+        public static function clone_library_assets(\context_module $context, int $attemptid, int $libraryversionid): void {
+            self::$clonecalls++;
+            if ($context->id !== 99 || $attemptid <= 0 || $libraryversionid !== 91) {
+                throw new \RuntimeException('Unexpected Native asset clone arguments');
+            }
+        }
+
+        public static function asset_urls(\context_module $context, int $attemptid): array {
+            self::$asseturlcalls++;
+            if ($context->id !== 99 || $attemptid <= 0) {
+                throw new \RuntimeException('Unexpected Native asset URL arguments');
+            }
+            return [];
+        }
     }
 }
 
@@ -147,10 +171,16 @@ namespace {
     $session->status = 'open';
     $GLOBALS['DB']->update_record('wsg_session', $session);
 
-    // 2) Start attempt from frozen Native snapshot.
+    // 2) Start attempt from frozen Native snapshot and clone the immutable teacher assets.
+    \mod_worksheetgrader\service\native_asset_service::$clonecalls = 0;
+    \mod_worksheetgrader\service\native_asset_service::$asseturlcalls = 0;
     $team = $GLOBALS['DB']->get_record('wsg_team', ['id' => 30], '*', MUST_EXIST);
     $attempt = \mod_worksheetgrader\service\attempt_manager::get_or_create($session, $team, 100);
     assert_true(json_decode((string)$attempt->answersjson, true) === json_decode($teacherjson, true), 'attempt must start from frozen Native JSON');
+    assert_true(
+        \mod_worksheetgrader\service\native_asset_service::$clonecalls === 1,
+        'Native attempt creation must clone managed Library assets'
+    );
 
     // 3) Save Native student answer through the normal optimistic attempt version lane.
     $studentjson = json_encode([
@@ -166,13 +196,17 @@ namespace {
     assert_true((int)$attempt->version === 2, 'Native save must increment attempt version');
     assert_true(json_decode((string)$attempt->answersjson, true) === json_decode($studentjson, true), 'Native save must persist canonical document');
 
-    // 4) Submit freezes immutable server-rendered submission.
+    // 4) Submit freezes immutable server-rendered submission with managed asset URLs.
     $activity = $GLOBALS['DB']->get_record('worksheetgrader', ['id' => 10], '*', MUST_EXIST);
     $cm = (object)['id' => 99];
     \mod_worksheetgrader\service\attempt_manager::submit($attempt, $session, $activity, $cm, 100);
     $submitted = $GLOBALS['DB']->get_record('wsg_attempt', ['id' => $attempt->id], '*', MUST_EXIST);
     assert_true($submitted->status === 'submitted', 'attempt must be submitted');
     assert_true(str_contains((string)$submitted->submissionhtml, 'Câu trả lời của học sinh'), 'submission HTML must be frozen from Native answer');
+    assert_true(
+        \mod_worksheetgrader\service\native_asset_service::$asseturlcalls === 1,
+        'Native submit must resolve managed attempt asset URLs for immutable rendering'
+    );
     $frozenjson = $submitted->answersjson;
     $frozenhtml = $submitted->submissionhtml;
 
@@ -197,7 +231,9 @@ namespace {
     assert_true((float)$grade->finalgrade === 8.5 && (int)$grade->published === 1, 'published grade must persist');
 
     echo "NATIVE_SESSION_SNAPSHOT=PASS\n";
+    echo "NATIVE_ATTEMPT_ASSET_CLONE=PASS\n";
     echo "NATIVE_ATTEMPT_SAVE=PASS\n";
+    echo "NATIVE_SUBMIT_ASSET_RESOLUTION=PASS\n";
     echo "NATIVE_SUBMIT_FREEZE=PASS\n";
     echo "POST_SUBMIT_MUTATION_REJECTED=PASS\n";
     echo "NATIVE_GRADING_IMMUTABILITY=PASS\n";
