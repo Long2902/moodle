@@ -133,18 +133,88 @@ define(['core/ajax', 'local_digieranative/native_editor'], function(Ajax, Native
         };
 
         const saveNow = canonical => controller.saveNow({nativejson: canonicalJson(canonical)});
+        const saveBeforeOutput = async label => {
+            const result = await saveNow();
+            if (!result || result.conflict || result.blocked || result.ok !== true) {
+                failVisible(`Không thể ${label} vì bản nháp chưa lưu thành công.`);
+                return false;
+            }
+            return true;
+        };
+
+        const filenameFromDisposition = (header, fallback) => {
+            const encoded = (header || '').match(/filename\*=UTF-8''([^;]+)/i);
+            if (encoded) {
+                try {
+                    return decodeURIComponent(encoded[1]);
+                } catch (error) {
+                    // Fall back to the simple filename below.
+                }
+            }
+            const plain = (header || '').match(/filename="?([^";]+)"?/i);
+            return plain?.[1] ? decodeURIComponent(plain[1]) : fallback;
+        };
 
         const downloadPdf = async () => {
             try {
-                const result = await saveNow();
-                if (result?.conflict || result?.blocked || result?.ok === false) {
-                    failVisible('Không thể tải PDF vì bản nháp chưa lưu thành công.');
+                if (!await saveBeforeOutput('tải PDF')) {
                     return;
                 }
-                window.location.assign(`${M.cfg.wwwroot}/local/worksheetlibrary/pdf.php?versionid=${Number(config.versionid)}`);
+                const response = await fetch(
+                    `${M.cfg.wwwroot}/local/worksheetlibrary/pdf.php?versionid=${Number(config.versionid)}`,
+                    {credentials: 'same-origin', cache: 'no-store'}
+                );
+                const contentType = (response.headers.get('content-type') || '').toLowerCase();
+                if (!response.ok || !contentType.includes('application/pdf')) {
+                    const body = await response.text();
+                    const clean = body.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+                    throw new Error(clean.slice(0, 240) || 'Máy chủ không tạo được PDF.');
+                }
+                const blob = await response.blob();
+                const objectUrl = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = objectUrl;
+                link.download = filenameFromDisposition(
+                    response.headers.get('content-disposition'),
+                    'worksheet.pdf'
+                );
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1500);
+                setStatus('saved');
             } catch (error) {
                 failVisible(error.message || 'Không thể chuẩn bị PDF.');
             }
+        };
+
+        const printWorksheet = () => {
+            const popup = window.open('', '_blank');
+            if (!popup) {
+                failVisible('Trình duyệt đang chặn cửa sổ in. Hãy cho phép popup cho trang LMS rồi thử lại.');
+                return;
+            }
+            popup.opener = null;
+            popup.document.open();
+            popup.document.write('<!doctype html><meta charset="utf-8"><title>Đang chuẩn bị bản in</title><p style="font-family:Arial,sans-serif;padding:24px">Đang chuẩn bị bản in…</p>');
+            popup.document.close();
+
+            (async () => {
+                try {
+                    if (!await saveBeforeOutput('in')) {
+                        popup.close();
+                        return;
+                    }
+                    popup.location.replace(
+                        `${M.cfg.wwwroot}/local/worksheetlibrary/print.php?versionid=${Number(config.versionid)}`
+                    );
+                    setStatus('saved');
+                } catch (error) {
+                    popup.close();
+                    failVisible(error.message || 'Không thể chuẩn bị bản in.');
+                }
+            })();
         };
 
         publishCanonical(source);
@@ -156,7 +226,7 @@ define(['core/ajax', 'local_digieranative/native_editor'], function(Ajax, Native
             assetUrls,
             imageAdapter,
             save: saveNow,
-            print: () => window.print(),
+            print: printWorksheet,
             downloadPdf,
             requestMath,
             onUpdate: canonical => {
