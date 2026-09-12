@@ -58,6 +58,11 @@ define(['core/ajax', 'local_digieranative/native_editor'], function(Ajax, Native
             return result;
         };
 
+        const isUpstreamHttp400 = response => {
+            const contentType = (response.headers.get('content-type') || '').toLowerCase();
+            return response.status === 400 && !contentType.includes('application/json');
+        };
+
         const loadAssetUrls = async () => {
             const url = `${M.cfg.wwwroot}/mod/worksheetgrader/native_asset.php?attemptid=${Number(config.attemptid)}&sesskey=${encodeURIComponent(M.cfg.sesskey)}`;
             const response = await fetch(url, {credentials: 'same-origin'});
@@ -114,21 +119,34 @@ define(['core/ajax', 'local_digieranative/native_editor'], function(Ajax, Native
                 setStatus('error');
                 throw new Error('Ảnh phải nhỏ hơn hoặc bằng 5 MiB.');
             }
-            const body = new FormData();
-            body.append('sesskey', M.cfg.sesskey);
-            body.append('attemptid', String(config.attemptid));
-            body.append('action', action);
-            if (assetKey) {
-                body.append('assetkey', assetKey);
-            }
-            body.append('image', file, file.name);
 
-            const response = await fetch(`${M.cfg.wwwroot}/mod/worksheetgrader/native_asset.php`, {
-                method: 'POST',
-                credentials: 'same-origin',
-                body,
-            });
+            const sendAsset = async uploadFile => {
+                const body = new FormData();
+                body.append('sesskey', M.cfg.sesskey);
+                body.append('attemptid', String(config.attemptid));
+                body.append('action', action);
+                if (assetKey) {
+                    body.append('assetkey', assetKey);
+                }
+                body.append('image', uploadFile, uploadFile.name);
+                return fetch(`${M.cfg.wwwroot}/mod/worksheetgrader/native_asset.php`, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    body,
+                });
+            };
+
             try {
+                let response = await sendAsset(file);
+                if (isUpstreamHttp400(response)) {
+                    // Retry exactly once after browser normalization to remove metadata/body signatures
+                    // that can trigger an upstream WAF while preserving Moodle's JSON 400 responses.
+                    const normalizedFile = await NativeEditor.normalizeImageForUpload(file);
+                    if (normalizedFile.size > 5 * 1024 * 1024) {
+                        throw new Error('Ảnh sau khi chuẩn hóa vẫn vượt quá 5 MiB.');
+                    }
+                    response = await sendAsset(normalizedFile);
+                }
                 return await parseJsonResponse(response, 'Tải ảnh thất bại');
             } catch (error) {
                 setStatus('error');
