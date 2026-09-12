@@ -7,6 +7,7 @@ export {
 export {
     createEditorState,
     mount,
+    normalizeImageForUpload,
 } from './editor.js';
 
 export {commands} from './commands.js';

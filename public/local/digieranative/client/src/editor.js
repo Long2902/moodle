@@ -24,6 +24,8 @@ import {schema} from './schema.js';
 import {createDigieraExtensions} from './tiptap_extensions.js';
 import {OfficialEditor} from './ui/official_editor.js';
 
+export {normalizeImageForUpload} from './image_normalizer.js';
+
 const DEFAULT_LAYOUT = Object.freeze({paper: 'A4', orientation: 'portrait', margin: 'normal'});
 
 function normalizeLayout(value) {
