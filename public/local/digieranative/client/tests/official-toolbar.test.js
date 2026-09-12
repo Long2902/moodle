@@ -2,12 +2,15 @@ import {readFileSync} from 'node:fs';
 import {describe, expect, it} from 'vitest';
 
 const editor = readFileSync(new URL('../src/editor.js', import.meta.url), 'utf8');
+const official = readFileSync(new URL('../src/ui/official_editor.js', import.meta.url), 'utf8');
 const ribbon = readFileSync(new URL('../src/ribbon.js', import.meta.url), 'utf8');
 
-describe('official toolbar migration contract', () => {
-    it('removes the legacy Ribbon from the active editor path', () => {
+describe('Cambridge toolbar migration contract', () => {
+    it('keeps Tiptap React while routing the active shell through CambridgeToolbar', () => {
         expect(editor).not.toMatch(/createRibbon/);
         expect(editor).toMatch(/OfficialEditor|@tiptap\/react/);
+        expect(official).toMatch(/CambridgeToolbar/);
+        expect(official).not.toMatch(/from ['"].*toolbar\.js/);
     });
 
     it('does not expose known dead placeholder controls', () => {
