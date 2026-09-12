@@ -62,5 +62,6 @@ jobs:
         run: |
           set -euo pipefail
           echo "FOCUSED_HEAD=$GITHUB_SHA"
+          echo 'VERIFY_SLICE=MANIFEST_V2_AND_CONTENT_ADAPTERS'
           vendor/bin/phpunit public/local/digieramedia/tests/backup_manifest_test.php
           vendor/bin/phpunit public/local/digieramedia/tests/content_adapter_test.php
