@@ -28,6 +28,32 @@ define(['core/ajax', 'local_digieranative/native_editor'], function(Ajax, Native
             window.alert(message || 'Không thể hoàn thành thao tác.');
         };
 
+        const parseJsonResponse = async (response, fallback) => {
+            const contentType = (response.headers.get('content-type') || '').toLowerCase();
+            const raw = await response.text();
+            let result = null;
+            if (contentType.includes('application/json')) {
+                try {
+                    result = JSON.parse(raw);
+                } catch (error) {
+                    // Fall through to a diagnostic message below.
+                }
+            }
+            if (!result) {
+                const clean = raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+                if (response.status === 413) {
+                    throw new Error('HTTP 413: ảnh vượt giới hạn upload của máy chủ/proxy.');
+                }
+                throw new Error(
+                    `HTTP ${response.status || 0}: ${clean.slice(0, 240) || fallback}`
+                );
+            }
+            if (!response.ok || result.ok !== true) {
+                throw new Error(result.error || `${fallback} (HTTP ${response.status || 0})`);
+            }
+            return result;
+        };
+
         const saveRemote = ({nativejson, revision}) => Ajax.call([{
             methodname: 'local_worksheetlibrary_save_native_draft',
             args: {
@@ -63,10 +89,7 @@ define(['core/ajax', 'local_digieranative/native_editor'], function(Ajax, Native
         const loadAssetUrls = async () => {
             const url = `${M.cfg.wwwroot}/local/worksheetlibrary/native_asset.php?versionid=${Number(config.versionid)}&sesskey=${encodeURIComponent(M.cfg.sesskey)}`;
             const response = await fetch(url, {credentials: 'same-origin'});
-            const result = await response.json();
-            if (!response.ok || !result.ok) {
-                throw new Error(result.error || 'Không thể tải danh sách ảnh');
-            }
+            const result = await parseJsonResponse(response, 'Không thể tải danh sách ảnh');
             Object.assign(assetUrls, result.asseturls || {});
             element._wslibAssetUrls = {...assetUrls};
             editor?.refreshAssetPreviews?.(assetUrls);
@@ -75,6 +98,14 @@ define(['core/ajax', 'local_digieranative/native_editor'], function(Ajax, Native
 
         const postAsset = async (action, file, assetKey = null) => {
             setStatus('upload');
+            if (!file || file.size <= 0) {
+                setStatus('error');
+                throw new Error('Tệp ảnh không hợp lệ.');
+            }
+            if (file.size > 5 * 1024 * 1024) {
+                setStatus('error');
+                throw new Error('Ảnh phải nhỏ hơn hoặc bằng 5 MiB.');
+            }
             const body = new FormData();
             body.append('sesskey', M.cfg.sesskey);
             body.append('versionid', String(config.versionid));
@@ -89,12 +120,12 @@ define(['core/ajax', 'local_digieranative/native_editor'], function(Ajax, Native
                 credentials: 'same-origin',
                 body,
             });
-            const result = await response.json();
-            if (!response.ok || !result.ok) {
+            try {
+                return await parseJsonResponse(response, 'Tải ảnh thất bại');
+            } catch (error) {
                 setStatus('error');
-                throw new Error(result.error || 'Tải ảnh thất bại');
+                throw error;
             }
-            return result;
         };
 
         const imageAdapter = {
