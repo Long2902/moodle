@@ -73,6 +73,9 @@ describe('DIGIERA Native V1 schema parity', () => {
 
         const expectedMarks = [
             'bold',
+            'fontFamily',
+            'fontSize',
+            'highlight',
             'italic',
             'link',
             'strike',
@@ -85,7 +88,7 @@ describe('DIGIERA Native V1 schema parity', () => {
 });
 
 describe('DIGIERA Native V1 attribute parity', () => {
-    it('exposes the exact server-approved attrs for every attributed node', async () => {
+    it('exposes the exact server-approved persisted attrs for every attributed node', async () => {
         const native = await import('../src/schema.js');
 
         const expected = {
@@ -98,7 +101,10 @@ describe('DIGIERA Native V1 attribute parity', () => {
             checkbox: ['checked', 'label', 'optionId', 'questionId'],
             multipleChoice: ['questionId', 'selectionMode'],
             answerTable: ['cols', 'questionId', 'rows'],
-            image: ['align', 'alt', 'assetKey', 'title', 'width'],
+            image: [
+                'align', 'alt', 'assetKey', 'caption', 'cropH', 'cropW', 'cropX', 'cropY',
+                'rotation', 'title', 'width', 'widthPercent',
+            ],
             orderedList: ['order'],
             teacherOnlyNote: ['label'],
             rubricAnchor: ['id'],
@@ -108,9 +114,12 @@ describe('DIGIERA Native V1 attribute parity', () => {
         };
 
         for (const [name, attrs] of Object.entries(expected)) {
+            // Runtime-only attrs are allowed for editor bookkeeping but must never be
+            // considered part of the persisted/server Native contract. The document
+            // adapter strips _nativeLegacyAttrs before emitting Native JSON.
             const actual = Object.keys(
                 native.schema.nodes[name].spec.attrs ?? {},
-            ).sort();
+            ).filter(key => !key.startsWith('_')).sort();
 
             expect(
                 actual,
@@ -125,7 +134,15 @@ describe('DIGIERA Native V1 attribute parity', () => {
         expect(
             Object.keys(native.schema.marks.textColor.spec.attrs ?? {}).sort(),
         ).toEqual(['color']);
-
+        expect(
+            Object.keys(native.schema.marks.highlight.spec.attrs ?? {}).sort(),
+        ).toEqual(['color']);
+        expect(
+            Object.keys(native.schema.marks.fontFamily.spec.attrs ?? {}).sort(),
+        ).toEqual(['family']);
+        expect(
+            Object.keys(native.schema.marks.fontSize.spec.attrs ?? {}).sort(),
+        ).toEqual(['px']);
         expect(
             Object.keys(native.schema.marks.link.spec.attrs ?? {}).sort(),
         ).toEqual(['class', 'href', 'rel', 'target']);
