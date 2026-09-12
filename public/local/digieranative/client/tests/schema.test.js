@@ -114,13 +114,16 @@ describe('DIGIERA Native V1 attribute parity', () => {
         };
 
         for (const [name, attrs] of Object.entries(expected)) {
-            // Runtime-only attrs are allowed for editor bookkeeping but must never be
-            // considered part of the persisted/server Native contract. The document
-            // adapter strips _nativeLegacyAttrs before emitting Native JSON.
-            const actual = Object.keys(
-                native.schema.nodes[name].spec.attrs ?? {},
-            ).filter(key => !key.startsWith('_')).sort();
+            const raw = Object.keys(native.schema.nodes[name].spec.attrs ?? {});
+            const runtimeOnly = raw.filter(key => key.startsWith('_'));
+            expect(
+                runtimeOnly,
+                `unexpected runtime-only attrs for node ${name}`,
+            ).toEqual(name === 'image' ? ['_nativeLegacyAttrs'] : []);
 
+            // _nativeLegacyAttrs exists only to preserve untouched legacy images inside
+            // the editor runtime. document_adapter strips it before emitting Native JSON.
+            const actual = raw.filter(key => key !== '_nativeLegacyAttrs').sort();
             expect(
                 actual,
                 `attrs mismatch for node ${name}`,
