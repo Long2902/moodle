@@ -3,7 +3,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_digieramedia';
-$plugin->version = 2026091001;
+$plugin->version = 2026091101;
 $plugin->requires = 2025100600;
 $plugin->maturity = MATURITY_RC;
-$plugin->release = '1.0.0-rc1-fasttrack-recent-permissions';
+$plugin->release = '1.0.0-rc1-fasttrack-backup-coursepublisher';
