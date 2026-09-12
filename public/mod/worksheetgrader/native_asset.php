@@ -2,12 +2,12 @@
 require('../../config.php');
 require_once(__DIR__ . '/locallib.php');
 
-$attemptid = required_param('attemptid', PARAM_INT);
-require_sesskey();
-
 header('Content-Type: application/json; charset=utf-8');
 
 try {
+    $attemptid = required_param('attemptid', PARAM_INT);
+    require_sesskey();
+
     $attempt = $DB->get_record('wsg_attempt', ['id' => $attemptid], '*', MUST_EXIST);
     $session = $DB->get_record('wsg_session', ['id' => $attempt->sessionid], '*', MUST_EXIST);
     $activity = $DB->get_record('worksheetgrader', ['id' => $session->worksheetgraderid], '*', MUST_EXIST);
