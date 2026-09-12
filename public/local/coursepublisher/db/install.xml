@@ -1,0 +1,382 @@
+<?xml version='1.0' encoding='utf-8'?>
+<XMLDB PATH="local/coursepublisher/db" VERSION="2026082902" COMMENT="XMLDB file for local_coursepublisher">
+  <TABLES>
+    <TABLE NAME="local_cp_program" COMMENT="Course Publisher programs">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="code" TYPE="char" LENGTH="64" NOTNULL="true" />
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" />
+        <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" />
+        <FIELD NAME="discoveryrootcategoryid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="code_uix" UNIQUE="true" FIELDS="code" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_cp_target_group" COMMENT="Program publishing target groups">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="programid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="groupkey" TYPE="char" LENGTH="64" NOTNULL="true" />
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" />
+        <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" />
+        <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="program_fk" TYPE="foreign" FIELDS="programid" REFTABLE="local_cp_program" REFFIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="program_group_uix" UNIQUE="true" FIELDS="programid, groupkey" />
+        <INDEX NAME="enabled_ix" UNIQUE="false" FIELDS="enabled" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_cp_discovery_rule" COMMENT="Course recognition rules for target groups">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="targetgroupid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" />
+        <FIELD NAME="fieldname" TYPE="char" LENGTH="16" NOTNULL="true" DEFAULT="fullname" />
+        <FIELD NAME="matchtype" TYPE="char" LENGTH="16" NOTNULL="true" DEFAULT="contains" />
+        <FIELD NAME="pattern" TYPE="text" NOTNULL="true" />
+        <FIELD NAME="priority" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="100" />
+        <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" />
+        <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="targetgroup_fk" TYPE="foreign" FIELDS="targetgroupid" REFTABLE="local_cp_target_group" REFFIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="group_enabled_ix" UNIQUE="false" FIELDS="targetgroupid, enabled" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_cp_discovery_container" COMMENT="Recognised topology container name rules">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" />
+        <FIELD NAME="matchtype" TYPE="char" LENGTH="16" NOTNULL="true" DEFAULT="contains" />
+        <FIELD NAME="pattern" TYPE="text" NOTNULL="true" />
+        <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" />
+        <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="enabled_ix" UNIQUE="false" FIELDS="enabled" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_cp_master" COMMENT="Program target-group master course bindings">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="programid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="gradekey" TYPE="char" LENGTH="64" NOTNULL="true" />
+        <FIELD NAME="targetgroupid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="program_fk" TYPE="foreign" FIELDS="programid" REFTABLE="local_cp_program" REFFIELDS="id" />
+        <KEY NAME="targetgroup_fk" TYPE="foreign" FIELDS="targetgroupid" REFTABLE="local_cp_target_group" REFFIELDS="id" />
+        <KEY NAME="course_fk" TYPE="foreign" FIELDS="courseid" REFTABLE="course" REFFIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="program_grade_uix" UNIQUE="true" FIELDS="programid, gradekey" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_cp_region" COMMENT="Deployment regions">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="code" TYPE="char" LENGTH="64" NOTNULL="true" />
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" />
+        <FIELD NAME="categoryid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="code_uix" UNIQUE="true" FIELDS="code" />
+        <INDEX NAME="category_ix" UNIQUE="false" FIELDS="categoryid" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_cp_school" COMMENT="Registered deployment schools">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="regionid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="code" TYPE="char" LENGTH="64" NOTNULL="true" />
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" />
+        <FIELD NAME="categoryid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="region_fk" TYPE="foreign" FIELDS="regionid" REFTABLE="local_cp_region" REFFIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="code_uix" UNIQUE="true" FIELDS="code" />
+        <INDEX NAME="region_ix" UNIQUE="false" FIELDS="regionid" />
+        <INDEX NAME="category_ix" UNIQUE="false" FIELDS="categoryid" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_cp_target" COMMENT="Program school grade target course bindings">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="programid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="schoolid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="gradekey" TYPE="char" LENGTH="64" NOTNULL="true" />
+        <FIELD NAME="targetgroupid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="courseid" TYPE="int" LENGTH="10" NOTNULL="true" />
+        <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="program_fk" TYPE="foreign" FIELDS="programid" REFTABLE="local_cp_program" REFFIELDS="id" />
+        <KEY NAME="targetgroup_fk" TYPE="foreign" FIELDS="targetgroupid" REFTABLE="local_cp_target_group" REFFIELDS="id" />
+        <KEY NAME="school_fk" TYPE="foreign" FIELDS="schoolid" REFTABLE="local_cp_school" REFFIELDS="id" />
+        <KEY NAME="course_fk" TYPE="foreign" FIELDS="courseid" REFTABLE="course" REFFIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="route_uix" UNIQUE="true" FIELDS="programid, schoolid, gradekey" />
+        <INDEX NAME="course_ix" UNIQUE="false" FIELDS="courseid" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_cp_audit" COMMENT="Course Publisher administrative audit log">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="action" TYPE="char" LENGTH="64" NOTNULL="true" />
+        <FIELD NAME="entitytype" TYPE="char" LENGTH="32" NOTNULL="true" />
+        <FIELD NAME="entityid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="details" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="userid_ix" UNIQUE="false" FIELDS="userid" />
+        <INDEX NAME="entity_ix" UNIQUE="false" FIELDS="entitytype, entityid" />
+        <INDEX NAME="time_ix" UNIQUE="false" FIELDS="timecreated" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_cp_job" COMMENT="Durable CASE 2 publish jobs">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="requestid" TYPE="char" LENGTH="32" NOTNULL="true" />
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="programid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="schoolid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="gradekey" TYPE="char" LENGTH="64" NOTNULL="true" />
+        <FIELD NAME="sourcetype" TYPE="char" LENGTH="16" NOTNULL="true" />
+        <FIELD NAME="sourceid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="sourcecourseid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="targetbindid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="targetcourseid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="targetsectionid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="batchid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="batchtargetid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="attemptno" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="1" />
+        <FIELD NAME="mutationstate" TYPE="char" LENGTH="16" NOTNULL="true" DEFAULT="unknown" />
+        <FIELD NAME="mode" TYPE="char" LENGTH="16" NOTNULL="true" DEFAULT="foundation" />
+        <FIELD NAME="status" TYPE="char" LENGTH="32" NOTNULL="true" DEFAULT="draft" />
+        <FIELD NAME="attempts" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="idempotencykey" TYPE="char" LENGTH="64" NOTNULL="true" />
+        <FIELD NAME="sourcefingerprint" TYPE="char" LENGTH="64" NOTNULL="true" />
+        <FIELD NAME="preflightjson" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="lasterror" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timestarted" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timefinished" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="requestid_uix" UNIQUE="true" FIELDS="requestid" />
+        <INDEX NAME="idempotency_uix" UNIQUE="true" FIELDS="idempotencykey" />
+        <INDEX NAME="status_ix" UNIQUE="false" FIELDS="status" />
+        <INDEX NAME="target_ix" UNIQUE="false" FIELDS="targetcourseid" />
+        <INDEX NAME="route_ix" UNIQUE="false" FIELDS="programid, schoolid, gradekey" />
+        <INDEX NAME="userid_ix" UNIQUE="false" FIELDS="userid" />
+        <INDEX NAME="batch_ix" UNIQUE="false" FIELDS="batchid" />
+        <INDEX NAME="batchtarget_ix" UNIQUE="false" FIELDS="batchtargetid" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_cp_job_item" COMMENT="CASE 2 publish job item scaffold/results">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="jobid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="sourcecmid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="sourcemodule" TYPE="char" LENGTH="32" NOTNULL="true" />
+        <FIELD NAME="sourceinstanceid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="sourcefingerprint" TYPE="char" LENGTH="64" NOTNULL="true" />
+        <FIELD NAME="targetcmid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="status" TYPE="char" LENGTH="32" NOTNULL="true" DEFAULT="pending" />
+        <FIELD NAME="attempts" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="errorcode" TYPE="char" LENGTH="64" NOTNULL="false" />
+        <FIELD NAME="errormessage" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timestarted" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timefinished" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="job_fk" TYPE="foreign" FIELDS="jobid" REFTABLE="local_cp_job" REFFIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="job_source_uix" UNIQUE="true" FIELDS="jobid, sourcecmid" />
+        <INDEX NAME="status_ix" UNIQUE="false" FIELDS="status" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_cp_job_log" COMMENT="CASE 2 publish job event audit">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="jobid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="event" TYPE="char" LENGTH="64" NOTNULL="true" />
+        <FIELD NAME="level" TYPE="char" LENGTH="16" NOTNULL="true" DEFAULT="info" />
+        <FIELD NAME="message" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="details" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="job_fk" TYPE="foreign" FIELDS="jobid" REFTABLE="local_cp_job" REFFIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="job_time_ix" UNIQUE="false" FIELDS="jobid, timecreated" />
+        <INDEX NAME="userid_ix" UNIQUE="false" FIELDS="userid" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_cp_batch" COMMENT="Multi-target fan-out publish batches">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="requestid" TYPE="char" LENGTH="32" NOTNULL="true" />
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="programid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="gradekey" TYPE="char" LENGTH="64" NOTNULL="true" />
+        <FIELD NAME="targetgroupid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="sourcetype" TYPE="char" LENGTH="16" NOTNULL="true" />
+        <FIELD NAME="sourceid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="sourcecourseid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="sourcefingerprint" TYPE="char" LENGTH="64" NOTNULL="true" />
+        <FIELD NAME="publishmode" TYPE="char" LENGTH="32" NOTNULL="true" />
+        <FIELD NAME="placementmode" TYPE="char" LENGTH="16" NOTNULL="true" DEFAULT="auto" />
+        <FIELD NAME="placementjson" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="resolverversion" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="1" />
+        <FIELD NAME="status" TYPE="char" LENGTH="32" NOTNULL="true" DEFAULT="draft" />
+        <FIELD NAME="dispatchlimit" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="10" />
+        <FIELD NAME="pausereason" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="totaltargets" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="readytargets" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="blockedtargets" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="waitingtargets" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="queuedtargets" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="runningtargets" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="succeededtargets" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="failedtargets" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="manualreviewtargets" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="cancelledtargets" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timestarted" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timefinished" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="requestid_uix" UNIQUE="true" FIELDS="requestid" />
+        <INDEX NAME="status_ix" UNIQUE="false" FIELDS="status" />
+        <INDEX NAME="program_grade_ix" UNIQUE="false" FIELDS="programid, gradekey" />
+        <INDEX NAME="source_ix" UNIQUE="false" FIELDS="sourcecourseid, sourcetype, sourceid" />
+        <INDEX NAME="userid_ix" UNIQUE="false" FIELDS="userid" />
+        <INDEX NAME="timecreated_ix" UNIQUE="false" FIELDS="timecreated" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_cp_batch_target" COMMENT="Per-target fan-out snapshot and execution state">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="batchid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="targetbindid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="regionid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="schoolid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="targetcourseid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="preflightstatus" TYPE="char" LENGTH="16" NOTNULL="true" DEFAULT="blocked" />
+        <FIELD NAME="status" TYPE="char" LENGTH="32" NOTNULL="true" DEFAULT="blocked" />
+        <FIELD NAME="blockcode" TYPE="char" LENGTH="64" NOTNULL="false" />
+        <FIELD NAME="blockreason" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="preflightjson" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="logicalplacementjson" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="resolvedplacementjson" TYPE="text" NOTNULL="false" />
+        <FIELD NAME="attempts" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="latestjobid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timefinished" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+        <KEY NAME="batch_fk" TYPE="foreign" FIELDS="batchid" REFTABLE="local_cp_batch" REFFIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="batch_target_uix" UNIQUE="true" FIELDS="batchid, targetbindid" />
+        <INDEX NAME="batch_status_ix" UNIQUE="false" FIELDS="batchid, status" />
+        <INDEX NAME="targetcourse_ix" UNIQUE="false" FIELDS="targetcourseid" />
+        <INDEX NAME="latestjob_ix" UNIQUE="false" FIELDS="latestjobid" />
+        <INDEX NAME="school_ix" UNIQUE="false" FIELDS="schoolid" />
+        <INDEX NAME="region_ix" UNIQUE="false" FIELDS="regionid" />
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="local_cp_origin_map" COMMENT="Durable source-to-target object mappings">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true" />
+        <FIELD NAME="sourcecourseid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="sourcetype" TYPE="char" LENGTH="16" NOTNULL="true" />
+        <FIELD NAME="sourceid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="targetcourseid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="targettype" TYPE="char" LENGTH="16" NOTNULL="true" />
+        <FIELD NAME="targetid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="batchid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="jobid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="sourcefingerprint" TYPE="char" LENGTH="64" NOTNULL="true" />
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" />
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id" />
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="source_target_uix" UNIQUE="true" FIELDS="sourcecourseid, sourcetype, sourceid, targetcourseid" />
+        <INDEX NAME="target_ix" UNIQUE="false" FIELDS="targetcourseid, targettype, targetid" />
+        <INDEX NAME="job_ix" UNIQUE="false" FIELDS="jobid" />
+        <INDEX NAME="batch_ix" UNIQUE="false" FIELDS="batchid" />
+      </INDEXES>
+    </TABLE>
+  </TABLES>
+</XMLDB>
