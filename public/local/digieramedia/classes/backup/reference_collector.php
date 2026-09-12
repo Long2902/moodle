@@ -6,6 +6,9 @@ use local_digieramedia\repository\media_repository;
 use local_digieramedia\repository\reference_repository;
 use local_digieramedia\repository\version_repository;
 
+/**
+ * Collects portable manifests from markers that are actually persisted in content.
+ */
 final class reference_collector {
     public function __construct(
         private reference_repository $references,
@@ -13,9 +16,10 @@ final class reference_collector {
         private version_repository $versions,
     ) {}
 
-    public function collect_from_text(string $content): array {
+    public function collect_content(content_record $record): array {
         $result = [];
-        foreach (reference_parser::extract($content) as $marker) {
+        $occurrence = 0;
+        foreach (reference_parser::extract($record->content) as $marker) {
             $reference = $this->references->get_by_uuid((string)$marker['uuid']);
             if (!$reference) {
                 throw new \UnexpectedValueException('DIGIERA Media reference marker cannot be resolved');
@@ -28,8 +32,26 @@ final class reference_collector {
                 throw new \UnexpectedValueException('DIGIERA Media reference has no effective version');
             }
             $version = $this->versions->get($versionid);
-            $result[] = reference_manifest::from_reference($reference, $media, $version);
+            $result[] = reference_manifest::from_reference(
+                $reference,
+                $media,
+                $version,
+                $record->adapter,
+                $record->sourceentityid,
+                $record->fieldname,
+                $occurrence++
+            );
         }
         return $result;
+    }
+
+    /**
+     * Compatibility shim for older callers until the adapter migration is complete.
+     */
+    public function collect_from_text(string $content): array {
+        if ($content === '') {
+            return [];
+        }
+        return $this->collect_content(new content_record('legacy', 1, 'content', $content));
     }
 }
