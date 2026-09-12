@@ -1,0 +1,64 @@
+name: DIGIERA Media Backup CoursePublisher Dev
+
+on:
+  push:
+    branches:
+      - feature/digiera-media-v1-rc1-backup-coursepublisher
+    paths:
+      - 'public/local/digieramedia/**'
+      - 'public/local/coursepublisher/**'
+      - '.github/workflows/digiera-media-backup-coursepublisher-dev.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: digiera-media-backup-cp-dev-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  focused-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: MySQL 8.4
+        uses: moodlehq/mysql-action@v1
+        with:
+          collation server: utf8mb4_bin
+          mysql version: 8.4
+          mysql database: test
+          mysql user: test
+          mysql password: test
+          use tmpfs: true
+          tmpfs size: '1024M'
+          extra conf: --skip-log-bin
+      - name: PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.3
+          ini-values: max_input_vars=5000
+          coverage: none
+      - name: Checkout branch
+        uses: actions/checkout@v4
+      - name: PHP syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          find public/local/digieramedia -type f -name '*.php' -print0 | sort -z | xargs -0 -r -n1 php -l
+          if test -d public/local/coursepublisher; then
+            find public/local/coursepublisher -type f -name '*.php' -print0 | sort -z | xargs -0 -r -n1 php -l
+          fi
+      - name: Set up Moodle PHPUnit
+        env:
+          dbtype: mysqli
+        run: |
+          echo "pathtophp=$(which php)" >> "$GITHUB_ENV"
+          cp .github/workflows/config-template.php config.php
+          mkdir -p ../moodledata
+          sudo locale-gen en_AU.UTF-8
+          php public/admin/tool/phpunit/cli/init.php --no-composer-self-update
+      - name: Focused DIGIERA backup tests
+        env:
+          dbtype: mysqli
+        shell: bash
+        run: |
+          set -euo pipefail
+          vendor/bin/phpunit public/local/digieramedia/tests/backup_manifest_test.php
