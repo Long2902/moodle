@@ -32,6 +32,24 @@ namespace core\lock {
     }
 }
 
+// The production service is Moodle-autoloaded and reads real File API assets.
+// This standalone harness has no Moodle autoloader/file storage, so provide the
+// narrow dependency needed by native_version_service. The fixture below contains
+// no image nodes, therefore an empty asset URL map is the correct test input.
+namespace local_worksheetlibrary\service {
+    final class native_asset_service {
+        public static int $asseturlcalls = 0;
+
+        public static function asset_urls(int $versionid): array {
+            self::$asseturlcalls++;
+            if ($versionid !== 11) {
+                throw new \RuntimeException('Unexpected standalone Native asset version id');
+            }
+            return [];
+        }
+    }
+}
+
 namespace {
     final class fake_transaction {
         public bool $committed = false;
@@ -130,6 +148,7 @@ namespace {
 
     // Successful save increments N -> N+1 and persists canonical source/rendered HTML.
     $GLOBALS['DB'] = new fake_db();
+    \local_worksheetlibrary\service\native_asset_service::$asseturlcalls = 0;
     $saved = \local_worksheetlibrary\service\native_version_service::save_draft(11, 0, $valid, 99);
     assert_true((int)$saved->revision === 1, 'first save revision must become 1');
     assert_true($saved->nativejson === $valid, 'Native JSON must persist exactly');
@@ -137,6 +156,10 @@ namespace {
     assert_true(str_contains((string)$saved->renderedhtml, 'Xin chào Native'), 'server-rendered HTML must persist');
     assert_true(hash('sha256', $valid) === $saved->contenthash, 'content hash must cover Native JSON');
     assert_true($GLOBALS['DB']->transaction?->committed === true, 'save transaction must commit');
+    assert_true(
+        \local_worksheetlibrary\service\native_asset_service::$asseturlcalls === 1,
+        'Native save must resolve managed asset URLs before rendering'
+    );
 
     // Stale expected revision raises typed conflict and does not mutate.
     $before = clone $GLOBALS['DB']->tables['wslib_version'][11];
@@ -179,4 +202,5 @@ namespace {
     echo "NATIVE_DRAFT_CONFLICT=PASS\n";
     echo "NATIVE_DRAFT_VALIDATION=PASS\n";
     echo "NATIVE_DRAFT_RENDER=PASS\n";
+    echo "NATIVE_DRAFT_ASSET_URL_RESOLUTION=PASS\n";
 }
