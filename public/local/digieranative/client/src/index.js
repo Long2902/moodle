@@ -8,6 +8,7 @@ export {
     createEditorState,
     mount,
     normalizeImageForUpload,
+    uploadFileInChunks,
 } from './editor.js';
 
 export {commands} from './commands.js';
