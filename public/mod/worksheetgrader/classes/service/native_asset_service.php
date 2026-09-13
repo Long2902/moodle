@@ -41,6 +41,25 @@ final class native_asset_service {
         ];
     }
 
+    private static function validate_bytes(string $bytes, string $original): array {
+        $size = strlen($bytes);
+        $sitemax = (int)get_max_upload_file_size();
+        $maxbytes = $sitemax > 0 ? min(self::MAX_BYTES, $sitemax) : self::MAX_BYTES;
+        if ($size <= 0 || $size > $maxbytes) {
+            throw new \moodle_exception('Image must be between 1 byte and 5 MiB');
+        }
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $mime = (string)$finfo->buffer($bytes);
+        if (!isset(self::MIME_EXTENSIONS[$mime])) {
+            throw new \moodle_exception('Only JPEG, PNG and WebP images are supported');
+        }
+        return [
+            'mime' => $mime,
+            'extension' => self::MIME_EXTENSIONS[$mime],
+            'original' => clean_filename($original),
+        ];
+    }
+
     private static function assert_asset_key(string $assetkey): void {
         if (!preg_match('/\Aa_[a-f0-9]{32}\z/', $assetkey)) {
             throw new \moodle_exception('Invalid Native asset key');
@@ -98,6 +117,28 @@ final class native_asset_service {
         ];
     }
 
+    public static function store_bytes(
+        \context_module $context,
+        int $attemptid,
+        string $bytes,
+        string $original,
+        int $userid
+    ): array {
+        $validated = self::validate_bytes($bytes, $original);
+        $assetkey = 'a_' . bin2hex(random_bytes(16));
+        $filename = $assetkey . '.' . $validated['extension'];
+        $file = get_file_storage()->create_file_from_string(
+            self::base_record($context, $attemptid, $userid, $filename),
+            $bytes
+        );
+
+        return [
+            'assetKey' => $assetkey,
+            'alt' => pathinfo($validated['original'], PATHINFO_FILENAME) ?: 'Ảnh',
+            'url' => self::file_url($context, $attemptid, $file),
+        ];
+    }
+
     public static function replace_upload(
         \context_module $context,
         int $attemptid,
@@ -118,6 +159,51 @@ final class native_asset_service {
         $temporary = $fs->create_file_from_pathname(
             self::base_record($context, $attemptid, $userid, $temporaryname),
             $validated['tmpname']
+        );
+
+        try {
+            $existing->replace_file_with($temporary);
+            $targetname = $assetkey . '.' . $validated['extension'];
+            if ($existing->get_filename() !== $targetname) {
+                $existing->rename('/native/', $targetname);
+            }
+        } finally {
+            $temporary->delete();
+        }
+
+        $current = self::find_asset_file($context, $attemptid, $assetkey);
+        if (!$current) {
+            throw new \moodle_exception('Native attempt image replacement failed');
+        }
+
+        return [
+            'assetKey' => $assetkey,
+            'alt' => pathinfo($validated['original'], PATHINFO_FILENAME) ?: 'Ảnh',
+            'url' => self::file_url($context, $attemptid, $current),
+        ];
+    }
+
+    public static function replace_bytes(
+        \context_module $context,
+        int $attemptid,
+        string $assetkey,
+        string $bytes,
+        string $original,
+        int $userid
+    ): array {
+        self::assert_asset_key($assetkey);
+        $validated = self::validate_bytes($bytes, $original);
+
+        $existing = self::find_asset_file($context, $attemptid, $assetkey);
+        if (!$existing) {
+            throw new \moodle_exception('Native attempt image asset not found');
+        }
+
+        $fs = get_file_storage();
+        $temporaryname = '__replace_' . bin2hex(random_bytes(8)) . '.' . $validated['extension'];
+        $temporary = $fs->create_file_from_string(
+            self::base_record($context, $attemptid, $userid, $temporaryname),
+            $bytes
         );
 
         try {
