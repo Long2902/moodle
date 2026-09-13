@@ -31,6 +31,77 @@ try {
     if (!in_array($action, ['create', 'replace'], true)) {
         throw new moodle_exception('Unsupported image action');
     }
+
+    $mode = optional_param('mode', 'multipart', PARAM_ALPHA);
+    if ($mode === 'chunk') {
+        $uploadid = required_param('uploadid', PARAM_ALPHANUMEXT);
+        $chunkindex = required_param('chunkindex', PARAM_INT);
+        $chunktotal = required_param('chunktotal', PARAM_INT);
+        $filesize = required_param('filesize', PARAM_INT);
+        $filename = required_param('filename', PARAM_FILE);
+        $mimetype = optional_param('mimetype', '', PARAM_RAW_TRIMMED);
+        $assetkey = $action === 'replace' ? required_param('assetkey', PARAM_ALPHANUMEXT) : '';
+
+        $contenttype = strtolower(trim(explode(';', (string)($_SERVER['CONTENT_TYPE'] ?? ''))[0]));
+        if ($contenttype !== 'application/octet-stream') {
+            throw new moodle_exception('Chunk body must be application/octet-stream');
+        }
+        $body = file_get_contents('php://input');
+        if ($body === false) {
+            throw new moodle_exception('Unable to read image chunk');
+        }
+
+        $scope = implode('|', [
+            'worksheetlibrary',
+            (string)$versionid,
+            $action,
+            $assetkey,
+            $filename,
+            $mimetype,
+            (string)$filesize,
+            (string)$chunktotal,
+        ]);
+        $assembled = \local_digieranative\service\chunk_upload_service::accept_chunk(
+            $scope,
+            strtolower($uploadid),
+            $chunkindex,
+            $chunktotal,
+            $filesize,
+            $filename,
+            $mimetype,
+            $body,
+            (int)$USER->id
+        );
+
+        if (empty($assembled['complete'])) {
+            echo json_encode(['ok' => true] + $assembled, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+
+        if ($action === 'replace') {
+            $result = \local_worksheetlibrary\service\native_asset_service::replace_bytes(
+                $versionid,
+                $assetkey,
+                $assembled['bytes'],
+                $assembled['original'],
+                (int)$USER->id
+            );
+        } else {
+            $result = \local_worksheetlibrary\service\native_asset_service::store_bytes(
+                $versionid,
+                $assembled['bytes'],
+                $assembled['original'],
+                (int)$USER->id
+            );
+        }
+
+        echo json_encode(['ok' => true, 'complete' => true] + $result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    if ($mode !== 'multipart') {
+        throw new moodle_exception('Unsupported upload mode');
+    }
     if (empty($_FILES['image'])) {
         throw new moodle_exception('Image upload is required');
     }
