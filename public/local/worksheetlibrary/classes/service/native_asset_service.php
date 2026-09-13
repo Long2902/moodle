@@ -55,6 +55,25 @@ final class native_asset_service {
         ];
     }
 
+    private static function validate_bytes(string $bytes, string $original): array {
+        $size = strlen($bytes);
+        $sitemax = (int)get_max_upload_file_size();
+        $maxbytes = $sitemax > 0 ? min(self::MAX_BYTES, $sitemax) : self::MAX_BYTES;
+        if ($size <= 0 || $size > $maxbytes) {
+            throw new \moodle_exception('Image must be between 1 byte and 5 MiB');
+        }
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $mime = (string)$finfo->buffer($bytes);
+        if (!isset(self::MIME_EXTENSIONS[$mime])) {
+            throw new \moodle_exception('Only JPEG, PNG and WebP images are supported');
+        }
+        return [
+            'mime' => $mime,
+            'extension' => self::MIME_EXTENSIONS[$mime],
+            'original' => clean_filename($original),
+        ];
+    }
+
     private static function assert_asset_key(string $assetkey): void {
         if (!preg_match('/\Aa_[a-f0-9]{32}\z/', $assetkey)) {
             throw new \moodle_exception('Invalid Native asset key');
@@ -112,6 +131,24 @@ final class native_asset_service {
         ];
     }
 
+    public static function store_bytes(int $versionid, string $bytes, string $original, int $userid): array {
+        self::require_native_draft($versionid);
+        $validated = self::validate_bytes($bytes, $original);
+
+        $assetkey = 'a_' . bin2hex(random_bytes(16));
+        $filename = $assetkey . '.' . $validated['extension'];
+        $file = get_file_storage()->create_file_from_string(
+            self::base_record($versionid, $userid, $filename),
+            $bytes
+        );
+
+        return [
+            'assetKey' => $assetkey,
+            'alt' => pathinfo($validated['original'], PATHINFO_FILENAME) ?: 'Ảnh',
+            'url' => self::file_url($versionid, $file),
+        ];
+    }
+
     public static function replace_upload(int $versionid, string $assetkey, array $upload, int $userid): array {
         self::require_native_draft($versionid);
         self::assert_asset_key($assetkey);
@@ -130,7 +167,51 @@ final class native_asset_service {
         );
 
         try {
-            // Preserve the existing stored-file identity/logical assetKey while replacing bytes.
+            $existing->replace_file_with($temporary);
+            $targetname = $assetkey . '.' . $validated['extension'];
+            if ($existing->get_filename() !== $targetname) {
+                $existing->rename('/', $targetname);
+            }
+        } finally {
+            $temporary->delete();
+        }
+
+        $current = self::find_asset_file($versionid, $assetkey);
+        if (!$current) {
+            throw new \moodle_exception('Native image replacement failed');
+        }
+
+        return [
+            'assetKey' => $assetkey,
+            'alt' => pathinfo($validated['original'], PATHINFO_FILENAME) ?: 'Ảnh',
+            'url' => self::file_url($versionid, $current),
+        ];
+    }
+
+    public static function replace_bytes(
+        int $versionid,
+        string $assetkey,
+        string $bytes,
+        string $original,
+        int $userid
+    ): array {
+        self::require_native_draft($versionid);
+        self::assert_asset_key($assetkey);
+        $validated = self::validate_bytes($bytes, $original);
+
+        $existing = self::find_asset_file($versionid, $assetkey);
+        if (!$existing) {
+            throw new \moodle_exception('Native image asset not found');
+        }
+
+        $fs = get_file_storage();
+        $temporaryname = '__replace_' . bin2hex(random_bytes(8)) . '.' . $validated['extension'];
+        $temporary = $fs->create_file_from_string(
+            self::base_record($versionid, $userid, $temporaryname),
+            $bytes
+        );
+
+        try {
             $existing->replace_file_with($temporary);
             $targetname = $assetkey . '.' . $validated['extension'];
             if ($existing->get_filename() !== $targetname) {
