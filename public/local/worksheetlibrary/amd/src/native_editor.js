@@ -6,6 +6,8 @@ define(['core/ajax', 'local_digieranative/native_editor'], function(Ajax, Native
         error: 'Lỗi khi lưu',
         upload: 'Đang tải ảnh…',
     };
+    const DIRECT_UPLOAD_LIMIT = 96 * 1024;
+    const CHUNK_UPLOAD_SIZE = 64 * 1024;
 
     const init = config => {
         const element = document.getElementById(config.elementid);
@@ -128,16 +130,57 @@ define(['core/ajax', 'local_digieranative/native_editor'], function(Ajax, Native
                 });
             };
 
+            const sendChunked = uploadFile => NativeEditor.uploadFileInChunks(
+                uploadFile,
+                async ({uploadId, chunkIndex, chunkTotal, fileSize, fileName, fileType, chunk}) => {
+                    const query = new URLSearchParams({
+                        mode: 'chunk',
+                        sesskey: M.cfg.sesskey,
+                        versionid: String(config.versionid),
+                        action,
+                        uploadid: uploadId,
+                        chunkindex: String(chunkIndex),
+                        chunktotal: String(chunkTotal),
+                        filesize: String(fileSize),
+                        filename: fileName,
+                        mimetype: fileType,
+                    });
+                    if (assetKey) {
+                        query.set('assetkey', assetKey);
+                    }
+                    const response = await fetch(
+                        `${M.cfg.wwwroot}/local/worksheetlibrary/native_asset.php?${query.toString()}`,
+                        {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: {'Content-Type': 'application/octet-stream'},
+                            body: chunk,
+                        }
+                    );
+                    return parseJsonResponse(response, 'Tải phần ảnh thất bại');
+                },
+                {chunkSize: CHUNK_UPLOAD_SIZE}
+            );
+
             try {
+                if (file.size > DIRECT_UPLOAD_LIMIT) {
+                    return await sendChunked(file);
+                }
+
                 let response = await sendAsset(file);
                 if (isUpstreamHttp400(response)) {
-                    // Retry exactly once after browser normalization to remove metadata/body signatures
-                    // that can trigger an upstream WAF while preserving Moodle's JSON 400 responses.
+                    // Keep the previous normalization fallback for anomalous small-file WAF rejects.
                     const normalizedFile = await NativeEditor.normalizeImageForUpload(file);
                     if (normalizedFile.size > 5 * 1024 * 1024) {
                         throw new Error('Ảnh sau khi chuẩn hóa vẫn vượt quá 5 MiB.');
                     }
+                    if (normalizedFile.size > DIRECT_UPLOAD_LIMIT) {
+                        return await sendChunked(normalizedFile);
+                    }
                     response = await sendAsset(normalizedFile);
+                    if (isUpstreamHttp400(response)) {
+                        return await sendChunked(normalizedFile);
+                    }
                 }
                 return await parseJsonResponse(response, 'Tải ảnh thất bại');
             } catch (error) {

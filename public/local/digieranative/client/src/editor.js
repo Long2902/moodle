@@ -25,6 +25,7 @@ import {createDigieraExtensions} from './tiptap_extensions.js';
 import {OfficialEditor} from './ui/official_editor.js';
 
 export {normalizeImageForUpload} from './image_normalizer.js';
+export {uploadFileInChunks} from './chunk_upload.js';
 
 const DEFAULT_LAYOUT = Object.freeze({paper: 'A4', orientation: 'portrait', margin: 'normal'});
 
